@@ -1,366 +1,443 @@
-# Any Router 多账号自动签到
+# AnyRouter Check-in 多账号自动签到
 
-多平台多账号自动签到，理论上支持所有 NewAPI、OneAPI 平台，目前内置支持 Any Router 与 Agent Router，其它可根据文档进行摸索配置。
+多平台多账号自动签到工具，支持 **VPS 自部署（Docker + Web 管理面板）** 和 **GitHub Actions** 两种运行方式。理论上支持所有 NewAPI / OneAPI 平台，内置 AnyRouter 与 AgentRouter 配置，其它平台可自行添加。
 
-推荐搭配使用[Auo](https://github.com/millylee/auo)，支持任意 Claude Code Token 切换的工具。
-
-**维护开源不易，如果本项目帮助到了你，请帮忙点个 Star，谢谢!**
-
-用于 Claude Code 中转站 Any Router 网站多账号每日签到，一次 $25，限时注册即送 100 美金，[点击这里注册](https://anyrouter.top/register?aff=gSsN)。业界良心，支持 Claude Sonnet 4.5、GPT-5-Codex、Claude Code 百万上下文（使用 `/model sonnet[1m]` 开启），`gemini-2.5-pro` 模型。
+用于 Claude Code 中转站 [AnyRouter](https://anyrouter.top/register?aff=qrQ2) 网站多账号每日签到，一次 $25。
 
 ## 功能特性
 
-- ✅ 多平台（兼容 NewAPI 与 OneAPI）
-- ✅ 单个/多账号自动签到
-- ✅ 多种机器人通知（可选）
-- ✅ 绕过 WAF 限制
+- 多平台支持（兼容 NewAPI / OneAPI）
+- 多账号管理，支持启用 / 禁用
+- 两种认证方式：**Cookie 模式** 和 **浏览器自动登录**（无需手动提取 Cookie）
+- Web 管理面板（仪表盘、账号管理、Provider 管理、执行日志）
+- 自定义签到间隔（1h / 2h / 4h / 6h / 8h / 12h / 24h / 自定义 Cron）
+- 手动触发签到（全部 / 单个账号）
+- 多种消息推送通知（Telegram / 钉钉 / 飞书 / 企业微信 / 邮箱等）
+- 自动绕过 WAF 限制（Playwright 无头浏览器）
+- Docker Compose 一键部署
+- 数据持久化（SQLite）
 
-## 使用方法
+---
+
+## 目录
+
+- [快速开始（Docker 部署）](#快速开始docker-部署)
+- [Web 管理面板使用指南](#web-管理面板使用指南)
+  - [登录](#登录)
+  - [仪表盘](#仪表盘)
+  - [账号管理](#账号管理)
+  - [Provider 管理](#provider-管理)
+  - [执行日志](#执行日志)
+- [账号认证方式](#账号认证方式)
+  - [Cookie 模式](#cookie-模式)
+  - [浏览器自动登录](#浏览器自动登录)
+- [签到间隔设置](#签到间隔设置)
+- [通知配置](#通知配置)
+- [GitHub Actions 方式](#github-actions-方式)
+- [本地开发](#本地开发)
+- [故障排除](#故障排除)
+- [免责声明](#免责声明)
+
+---
+
+## 快速开始（Docker 部署）
+
+### 前置条件
+
+- 一台 VPS 或本地服务器
+- 已安装 Docker 和 Docker Compose
+
+### 1. 克隆仓库
+
+```bash
+git clone https://github.com/millylee/anyrouter-check-in.git
+cd anyrouter-check-in
+```
+
+### 2. 修改配置
+
+编辑 `docker-compose.yml`，修改管理密码和时区：
+
+```yaml
+services:
+  checkin:
+    build: .
+    container_name: anyrouter-checkin
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - TZ=Asia/Shanghai          # 时区，根据你所在地区修改
+      - ADMIN_PASSWORD=your_password  # 管理面板登录密码，请务必修改
+    restart: unless-stopped
+```
+
+### 3. 构建并启动
+
+```bash
+docker compose up -d --build
+```
+
+首次构建需要下载 Chromium 浏览器，耐心等待即可。
+
+### 4. 访问管理面板
+
+打开浏览器访问：
+
+```
+http://你的服务器IP:8080
+```
+
+使用你在 `docker-compose.yml` 中设置的 `ADMIN_PASSWORD` 登录。
+
+### 5. 更新版本
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+数据保存在 `./data` 目录中，更新不会丢失数据。
+
+---
+
+## Web 管理面板使用指南
+
+### 登录
+
+访问管理面板后会自动跳转到登录页面，输入 `ADMIN_PASSWORD` 中配置的密码即可登录。登录状态保持 7 天。
+
+### 仪表盘
+
+仪表盘是主页面，包含以下信息：
+
+- **统计卡片**：账号总数、已启用数、签到成功数、签到失败数
+- **签到间隔设置**：右上角的下拉菜单可以选择签到频率
+- **下次签到时间**：显示下一次自动签到的时间
+- **立即全部签到**：手动触发所有已启用账号的签到
+- **账号状态卡片**：每个账号的详细状态（余额、已用额度、上次签到时间等）
+- **最近执行记录**：最近 10 条签到日志
+
+每个账号卡片上都有 **手动签到** 按钮，可以单独触发某个账号的签到。
+
+### 账号管理
+
+在「账号管理」页面可以进行：
+
+- **添加账号**：点击「添加账号」按钮，填写账号信息
+- **编辑账号**：修改账号名称、Provider、认证信息
+- **删除账号**：删除不需要的账号
+- **启用 / 禁用**：临时停用某个账号的自动签到
+
+### Provider 管理
+
+Provider 是签到目标平台的配置。系统内置了两个 Provider：
+
+| 名称 | 域名 | WAF 绕过 |
+|------|------|----------|
+| anyrouter | https://anyrouter.top | waf_cookies |
+| agentrouter | https://agentrouter.org | waf_cookies |
+
+内置 Provider 为只读，不可编辑或删除。如果你需要签到其他 NewAPI / OneAPI 平台，可以点击「添加 Provider」自行配置。
+
+添加自定义 Provider 时需要填写：
+
+| 字段 | 说明 | 默认值 |
+|------|------|--------|
+| 名称 | 唯一标识，添加账号时会用到 | - |
+| 域名 | 平台的完整域名，如 `https://example.com` | - |
+| 登录路径 | 登录页面路径 | `/login` |
+| 签到路径 | 签到 API 路径 | `/api/user/sign_in` |
+| 用户信息路径 | 获取用户余额的 API 路径 | `/api/user/self` |
+| API User Key | 请求头中的用户标识字段名 | `new-api-user` |
+| WAF 绕过方式 | 无（直接访问）或 WAF Cookies（Playwright） | 无 |
+| WAF Cookie 名称 | 需要获取的 WAF Cookie 名，逗号分隔 | - |
+
+### 执行日志
+
+记录所有签到操作的详细日志，支持按 **状态**（成功 / 失败）和 **账号** 筛选，带分页功能。
+
+每条日志包含：时间、账号、Provider、状态、余额、已用额度、触发方式（手动 / 定时）、详细信息。
+
+---
+
+## 账号认证方式
+
+添加账号时可以选择两种认证方式：
+
+### Cookie 模式
+
+手动从浏览器提取 Cookie 和 API User ID，适合所有平台。
+
+**获取 Cookie：**
+
+1. 打开浏览器访问目标平台（如 https://anyrouter.top/）并登录
+2. 按 F12 打开开发者工具
+3. 切换到 **Application**（应用）选项卡
+4. 在左侧找到 **Cookies**，点击对应域名
+5. 找到 `session` 字段，复制其值
+
+在添加账号时，Cookies 字段支持两种格式：
+
+```
+# JSON 格式
+{"session": "你的session值"}
+
+# 字符串格式
+session=你的session值
+```
+
+**获取 API User ID：**
+
+1. 在开发者工具中切换到 **Network**（网络）选项卡
+2. 勾选 **Fetch/XHR** 过滤
+3. 在页面上进行任意操作（如刷新页面）
+4. 找到任意请求，查看请求头中的 `New-Api-User` 字段
+5. 复制该值（通常是 5 位数字）
+
+### 浏览器自动登录
+
+通过无头浏览器自动完成登录和签到，无需手动提取 Cookie。
+
+只需填写：
+
+- **用户名 / 邮箱**：你的登录账号
+- **密码**：你的登录密码
+
+系统会使用 Playwright 无头浏览器自动打开登录页面、填写账号密码、完成登录后自动签到并获取余额信息。
+
+> **注意**：浏览器自动登录方式每次签到都会启动浏览器进程，资源消耗略高于 Cookie 模式。如果 Cookie 长期稳定，推荐使用 Cookie 模式。
+
+---
+
+## 签到间隔设置
+
+在仪表盘右上角可以设置签到间隔，提供以下预设选项：
+
+| 选项 | Cron 表达式 | 说明 |
+|------|-------------|------|
+| 每 1 小时 | `0 * * * *` | 每小时整点执行 |
+| 每 2 小时 | `0 */2 * * *` | 每 2 小时执行 |
+| 每 4 小时 | `0 */4 * * *` | 每 4 小时执行 |
+| 每 6 小时 | `0 */6 * * *` | 默认值 |
+| 每 8 小时 | `0 */8 * * *` | 每 8 小时执行 |
+| 每 12 小时 | `0 */12 * * *` | 每 12 小时执行 |
+| 每天一次 | `0 0 * * *` | 每天 0 点执行 |
+| 自定义 | 自行输入 | 标准 5 字段 Cron 表达式 |
+
+选择预设选项会立即生效；选择「自定义」后需要输入 Cron 表达式并点击「保存」。
+
+设置会持久化到数据库，容器重启后保留。
+
+> AnyRouter 的签到间隔约为 24 小时（非零点重置），建议设置为每 6 ~ 8 小时签到一次以确保不遗漏。
+
+---
+
+## 通知配置
+
+签到失败时会自动发送通知。在 `docker-compose.yml` 中取消对应通知方式的注释并填入配置即可。
+
+### Telegram Bot
+
+```yaml
+- TELEGRAM_BOT_TOKEN=你的Bot Token
+- TELEGRAM_CHAT_ID=你的Chat ID
+```
+
+### 钉钉机器人
+
+```yaml
+- DINGDING_WEBHOOK=你的Webhook地址
+```
+
+> 创建钉钉机器人时选择「自定义关键词」，填写 `AnyRouter`。
+
+### 飞书机器人
+
+```yaml
+- FEISHU_WEBHOOK=你的Webhook地址
+```
+
+### 企业微信机器人
+
+```yaml
+- WEIXIN_WEBHOOK=你的Webhook地址
+```
+
+### PushPlus
+
+```yaml
+- PUSHPLUS_TOKEN=你的Token
+```
+
+### Server 酱
+
+```yaml
+- SERVERPUSHKEY=你的SendKey
+```
+
+### 邮箱（SMTP）
+
+```yaml
+- EMAIL_USER=发件人邮箱地址
+- EMAIL_PASS=邮箱密码或授权码
+- EMAIL_TO=收件人邮箱地址
+# 可选
+- EMAIL_SENDER=显示的发件人地址
+- CUSTOM_SMTP_SERVER=自定义SMTP服务器
+```
+
+### Gotify
+
+```yaml
+- GOTIFY_URL=https://your-gotify-server/message
+- GOTIFY_TOKEN=应用访问令牌
+- GOTIFY_PRIORITY=9
+```
+
+### Bark
+
+```yaml
+- BARK_KEY=你的Bark Key
+# 可选，默认 https://api.day.app
+- BARK_SERVER=自建Bark服务器地址
+```
+
+每种通知方式独立工作，可以同时启用多种。未配置或配置错误的通知方式会自动跳过。
+
+修改通知配置后需要重启容器生效：
+
+```bash
+docker compose up -d
+```
+
+---
+
+## GitHub Actions 方式
+
+如果不想自建服务，也可以通过 GitHub Actions 运行。
 
 ### 1. Fork 本仓库
 
-点击右上角的 "Fork" 按钮，将本仓库 fork 到你的账户。
+### 2. 配置 Environment Secret
 
-### 2. 获取账号信息
-
-对于每个需要签到的账号，你需要获取：(可借助 [在线 Secrets 配置生成器](https://millylee.github.io/anyrouter-check-in/))
-
-1. **Cookies**: 用于身份验证
-2. **API User**: 用于请求头的 new-api-user 参数（自己配置其它平台时该值需要注意匹配）
-
-#### 获取 Cookies：
-
-1. 打开浏览器，访问 https://anyrouter.top/
-2. 登录你的账户
-3. 打开开发者工具 (F12)
-4. 切换到 "Application" 或 "存储" 选项卡
-5. 找到 "Cookies" 选项
-6. 复制所有 cookies
-
-#### 获取 API User：
-
-按照下方图片教程操作获得。
-
-### 3. 设置 GitHub Environment Secret
-
-1. 在你 fork 的仓库中，点击 "Settings" 选项卡
-2. 在左侧菜单中找到 "Environments" -> "New environment"
-3. 新建一个名为 `production` 的环境
-4. 点击新建的 `production` 环境进入环境配置页
-5. 点击 "Add environment secret" 创建 secret：
+1. 进入仓库 **Settings** → **Environments** → **New environment**
+2. 新建名为 `production` 的环境
+3. 添加 Secret：
    - Name: `ANYROUTER_ACCOUNTS`
-   - Value: 你的多账号配置数据
-
-### 4. 多账号配置格式
-
-支持单个与多个账号配置，可选 `name` 和 `provider` 字段：
+   - Value: JSON 格式的账号配置
 
 ```json
 [
   {
     "name": "我的主账号",
-    "cookies": {
-      "session": "account1_session_value"
-    },
-    "api_user": "account1_api_user_id"
+    "cookies": { "session": "你的session值" },
+    "api_user": "12345"
   },
   {
-    "name": "备用账号",
+    "name": "AgentRouter 账号",
     "provider": "agentrouter",
-    "cookies": {
-      "session": "account2_session_value"
-    },
-    "api_user": "account2_api_user_id"
+    "cookies": { "session": "你的session值" },
+    "api_user": "67890"
   }
 ]
 ```
 
-**字段说明**：
+字段说明：
 
-- `cookies` (必需)：用于身份验证的 cookies 数据
-- `api_user` (必需)：用于请求头的 new-api-user 参数
-- `provider` (可选)：指定使用的服务商，默认为 `anyrouter`
-- `name` (可选)：自定义账号显示名称，用于通知和日志中标识账号
+| 字段 | 必需 | 说明 |
+|------|------|------|
+| `cookies` | 是 | 身份验证 Cookie |
+| `api_user` | 是 | New-Api-User 请求头的值 |
+| `name` | 否 | 账号显示名称，默认为 `Account 1`、`Account 2` |
+| `provider` | 否 | 服务商标识，默认 `anyrouter` |
 
-**默认值说明**：
+### 3. 启用 Actions
 
-- 如果未提供 `provider` 字段，默认使用 `anyrouter`（向后兼容）
-- 如果未提供 `name` 字段，会使用 `Account 1`、`Account 2` 等默认名称
-- `anyrouter` 与 `agentrouter` 配置已内置，无需填写
+1. 进入仓库 **Actions** 选项卡
+2. 找到「AnyRouter 自动签到」workflow 并启用
+3. 可以手动点击 **Run workflow** 测试
 
-接下来获取 cookies 与 api_user 的值。
+### 4. 自定义 Provider（可选）
 
-通过 F12 工具，切到 Application 面板，拿到 session 的值，最好重新登录下，该值 1 个月有效期，但有可能提前失效，失效后报 401 错误，到时请再重新获取。
-
-![获取 cookies](./assets/request-session.png)
-
-通过 F12 工具，切到 Network 面板，可以过滤下，只要 Fetch/XHR，找到带 `New-Api-User`，这个值正常是 5 位数，如果是负数或者个位数，正常是未登录。
-
-![获取 api_user](./assets/request-api-user.png)
-
-### 5. 启用 GitHub Actions
-
-1. 在你的仓库中，点击 "Actions" 选项卡
-2. 如果提示启用 Actions，请点击启用
-3. 找到 "AnyRouter 自动签到" workflow
-4. 点击 "Enable workflow"
-
-### 6. 测试运行
-
-你可以手动触发一次签到来测试：
-
-1. 在 "Actions" 选项卡中，点击 "AnyRouter 自动签到"
-2. 点击 "Run workflow" 按钮
-3. 确认运行
-
-![运行结果](./assets/check-in.png)
-
-## 执行时间
-
-- 脚本每 6 小时执行一次（1. action 无法准确触发，基本延时 1~1.5h；2. 目前观测到 anyrouter 的签到是每 24h 而不是零点就可签到）
-- 你也可以随时手动触发签到
-
-## 注意事项
-
-- 请确保每个账号的 cookies 和 API User 都是正确的
-- 可以在 Actions 页面查看详细的运行日志
-- 支持部分账号失败，只要有账号成功签到，整个任务就不会失败
-- 报 401 错误，请重新获取 cookies，理论 1 个月失效，但有 Bug，详见 [#6](https://github.com/millylee/anyrouter-check-in/issues/6)
-- 请求 200，但出现 Error 1040（08004）：Too many connections，官方数据库问题，目前已修复，但遇到几次了，详见 [#7](https://github.com/millylee/anyrouter-check-in/issues/7)
-
-## 配置示例
-
-### 基础配置（向后兼容）
-
-假设你有两个账号需要签到，不指定 provider 时默认使用 anyrouter：
-
-```json
-[
-  {
-    "cookies": {
-      "session": "abc123session"
-    },
-    "api_user": "user123"
-  },
-  {
-    "cookies": {
-      "session": "xyz789session"
-    },
-    "api_user": "user456"
-  }
-]
-```
-
-### 多服务商配置
-
-如果你需要同时使用多个服务商（如 anyrouter 和 agentrouter）：
-
-```json
-[
-  {
-    "name": "AnyRouter 主账号",
-    "provider": "anyrouter",
-    "cookies": {
-      "session": "abc123session"
-    },
-    "api_user": "user123"
-  },
-  {
-    "name": "AgentRouter 备用",
-    "provider": "agentrouter",
-    "cookies": {
-      "session": "xyz789session"
-    },
-    "api_user": "user456"
-  }
-]
-```
-
-## 自定义 Provider 配置（可选）
-
-默认情况下，`anyrouter`、`agentrouter` 已内置配置，无需额外设置。如果你需要使用其他服务商，可以通过环境变量 `PROVIDERS` 配置：
-
-### 基础配置（仅域名）
-
-大多数情况下，只需提供 `domain` 即可，其他路径会自动使用默认值：
-
-```json
-{
-  "customrouter": {
-    "domain": "https://custom.example.com"
-  }
-}
-```
-
-### 完整配置（自定义路径）
-
-如果服务商使用了不同的 API 路径、请求头或需要 WAF 绕过，可以额外指定：
+如果需要签到其他平台，添加名为 `PROVIDERS` 的 Secret：
 
 ```json
 {
   "customrouter": {
     "domain": "https://custom.example.com",
-    "login_path": "/auth/login",
-    "sign_in_path": "/api/checkin",
-    "user_info_path": "/api/profile",
-    "api_user_key": "New-Api-User",
+    "sign_in_path": "/api/user/sign_in",
+    "user_info_path": "/api/user/self",
     "bypass_method": "waf_cookies",
-    "waf_cookie_names": ["acw_tc", "cdn_sec_tc", "acw_sc__v2"]
+    "waf_cookie_names": ["acw_tc"]
   }
 }
 ```
 
-**关于 `bypass_method`**：
+### 5. 通知配置
 
-- 不设置或设置为 `null`：直接使用用户提供的 cookies 进行请求（适合无 WAF 保护的网站）
-- 设置为 `"waf_cookies"`：使用 Playwright 打开浏览器获取 WAF cookies 后再进行请求（适合有 WAF 保护的网站）
+在 `production` 环境的 Secrets 中添加对应的通知环境变量（参见 [通知配置](#通知配置) 章节）。
 
-> 注：`anyrouter` 和 `agentrouter` 已内置默认配置，无需在 `PROVIDERS` 中配置
+---
 
-### 在 GitHub Actions 中配置
-
-1. 进入你的仓库 Settings -> Environments -> production
-2. 添加新的 secret：
-   - Name: `PROVIDERS`
-   - Value: 你的 provider 配置（JSON 格式）
-
-**字段说明**：
-
-- `domain` (必需)：服务商的域名
-- `login_path` (可选)：登录页面路径，默认为 `/login`（仅在 `bypass_method` 为 `"waf_cookies"` 时使用）
-- `sign_in_path` (可选)：签到 API 路径，默认为 `/api/user/sign_in`
-- `user_info_path` (可选)：用户信息 API 路径，默认为 `/api/user/self`
-- `api_user_key` (可选)：API 用户标识请求头名称，默认为 `new-api-user`
-- `bypass_method` (可选)：WAF 绕过方法
-  - `"waf_cookies"`：使用 Playwright 打开浏览器获取 WAF cookies 后再执行签到
-  - 不设置或 `null`：直接使用用户 cookies 执行签到（适合无 WAF 保护的网站）
-- `waf_cookie_names` (可选)：绕过 WAF 所需 cookie 的名称列表，`bypass_method` 为 `waf_cookies` 时必须设置
-
-**配置示例**（完整）：
-
-```json
-{
-  "customrouter": {
-    "domain": "https://custom.example.com",
-    "login_path": "/auth/login",
-    "sign_in_path": "/api/checkin",
-    "user_info_path": "/api/profile",
-    "api_user_key": "x-user-id",
-    "bypass_method": "waf_cookies"
-  }
-}
-```
-
-**内置配置说明**：
-
-- `anyrouter`：
-  - `bypass_method: "waf_cookies"`（需要先获取 WAF cookies，然后执行签到）
-  - `sign_in_path: "/api/user/sign_in"`
-- `agentrouter`：
-  - `bypass_method: null`（直接使用用户 cookies 执行签到）
-  - `sign_in_path: "/api/user/sign_in"`
-
-**重要提示**：
-
-- `PROVIDERS` 是可选的，不配置则使用内置的 `anyrouter` 和 `agentrouter`
-- 自定义的 provider 配置会覆盖同名的默认配置
-
-## 开启通知
-
-脚本支持多种通知方式，可以通过配置以下环境变量开启，如果 `webhook` 有要求安全设置，例如钉钉，可以在新建机器人时选择自定义关键词，填写 `AnyRouter`。
-
-### 邮箱通知(STMP)
-
-- `EMAIL_USER`: 发件人邮箱地址/STMP 登录地址
-- `EMAIL_PASS`: 发件人邮箱密码/授权码
-- `EMAIL_SENDER`: 邮件显示的发件人地址(可选，默认: EMAIL_USER)
-- `CUSTOM_SMTP_SERVER`: 自定义发件人 SMTP 服务器(可选)
-- `EMAIL_TO`: 收件人邮箱地址
-
-### 钉钉机器人
-
-- `DINGDING_WEBHOOK`: 钉钉机器人的 Webhook 地址
-
-### 飞书机器人
-
-- `FEISHU_WEBHOOK`: 飞书机器人的 Webhook 地址
-
-### 企业微信机器人
-
-- `WEIXIN_WEBHOOK`: 企业微信机器人的 Webhook 地址
-
-### PushPlus 推送
-
-- `PUSHPLUS_TOKEN`: PushPlus 的 Token
-
-### Server 酱
-
-- `SERVERPUSHKEY`: Server 酱的 SendKey
-
-### Telegram Bot
-
-- `TELEGRAM_BOT_TOKEN`: Telegram Bot 的 Token
-- `TELEGRAM_CHAT_ID`: Telegram Chat ID
-
-### Gotify 推送
-
-- `GOTIFY_URL`: Gotify 服务的 URL 地址（例如: https://your-gotify-server/message）
-- `GOTIFY_TOKEN`: Gotify 应用的访问令牌
-- `GOTIFY_PRIORITY`: Gotify 消息优先级 (1-10, 默认为 9)
-
-### Bark 推送
-
-- `BARK_KEY`: Bark 应用的 Key（APP 打开时即可看到）
-- `BARK_SERVER`: 自建 Bark 服务器地址 (可选，默认: https://api.day.app)
-
-配置步骤：
-
-1. 在仓库的 Settings -> Environments -> production -> Environment secrets 中添加上述环境变量
-2. 每个通知方式都是独立的，可以只配置你需要的推送方式
-3. 如果某个通知方式配置不正确或未配置，脚本会自动跳过该通知方式
-
-## 故障排除
-
-如果签到失败，请检查：
-
-1. 账号配置格式是否正确
-2. cookies 是否过期
-3. API User 是否正确
-4. 网站是否更改了签到接口
-5. 查看 Actions 运行日志获取详细错误信息
-
-## 本地开发环境设置
-
-如果你需要在本地测试或开发，请按照以下步骤设置：
+## 本地开发
 
 ```bash
-# 安装所有依赖
+# 安装依赖
 uv sync --dev
 
 # 安装 Playwright 浏览器
 uv run playwright install chromium
 
-# 创建 .env 文件并配置（注意：JSON 必须是单行格式）
-# 示例：
-# ANYROUTER_ACCOUNTS=[{"name":"账号1","cookies":{"session":"xxx"},"api_user":"12345"}]
-# PROVIDERS={"agentrouter":{"domain":"https://agentrouter.org"}}
+# 启动 Web 服务（开发模式）
+ADMIN_PASSWORD=admin uv run uvicorn web.app:app --host 0.0.0.0 --port 8080 --reload
 
-# 运行签到脚本
+# 或直接运行签到脚本（需配置 .env）
 uv run checkin.py
-```
-
-## 测试
-
-```bash
-uv sync --dev
-
-# 安装 Playwright 浏览器
-uv run playwright install chromium
 
 # 运行测试
 uv run pytest tests/
 ```
 
+---
+
+## 故障排除
+
+### 签到失败
+
+| 现象 | 可能原因 | 解决方法 |
+|------|----------|----------|
+| 401 错误 | Cookie 已过期 | 重新获取 Cookie 或改用浏览器自动登录 |
+| Error 1040 Too many connections | 平台数据库问题 | 等待一段时间后重试 |
+| 浏览器登录超时 | 网络问题或页面结构变化 | 检查容器日志 `docker logs anyrouter-checkin` |
+| Provider not found | 账号关联的 Provider 不存在 | 在 Provider 管理中添加对应配置 |
+
+### 容器相关
+
+```bash
+# 查看容器状态
+docker ps --filter name=anyrouter-checkin
+
+# 查看容器日志
+docker logs anyrouter-checkin --tail 50
+
+# 实时查看日志
+docker logs -f anyrouter-checkin
+
+# 重启容器
+docker compose restart
+
+# 完全重建
+docker compose down && docker compose up -d --build
+```
+
+### 数据备份
+
+所有数据保存在 `./data/checkin.db`（SQLite 数据库），备份此文件即可。
+
+---
+
 ## 免责声明
 
-本脚本仅用于学习和研究目的，使用前请确保遵守相关网站的使用条款.
+本项目仅用于学习和研究目的，使用前请确保遵守相关网站的使用条款。

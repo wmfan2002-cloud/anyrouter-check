@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+{% block title %}仪表盘 - AnyRouter Check-in{% endblock %}
+{% block content %}
+<div class="max-w-6xl">
+	<div class="flex items-center justify-between mb-8">
+		<div class="relative">
+			<h2 class="text-3xl font-black tracking-tight text-black">仪表盘</h2>
+			<p class="text-sm font-bold text-black mt-1">下次签到: <span id="next-run-text">{{ next_run or '未设置' }}</span></p>
+			<div class="absolute -top-2 -left-4 w-4 h-4 bg-[#ff6b6b] rounded-full border-2 border-black"></div>
+		</div>
+		<div class="flex items-center space-x-3">
+			<div class="flex items-center border-4 border-black bg-white shadow-[4px_4px_0px_#5f27cd] relative">
+				<div class="px-3 py-2.5 bg-[#5f27cd] text-white font-black text-xs border-r-4 border-black flex items-center">
+					<svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+					间隔
+				</div>
+				<select id="schedule-select" onchange="updateSchedule()"
+					class="px-3 py-2.5 bg-white text-black font-black text-xs focus:outline-none cursor-pointer">
+					<option value="0 * * * *" {% if cron_expression == '0 * * * *' %}selected{% endif %}>每 1 小时</option>
+					<option value="0 */2 * * *" {% if cron_expression == '0 */2 * * *' %}selected{% endif %}>每 2 小时</option>
+					<option value="0 */4 * * *" {% if cron_expression == '0 */4 * * *' %}selected{% endif %}>每 4 小时</option>
+					<option value="0 */6 * * *" {% if cron_expression == '0 */6 * * *' %}selected{% endif %}>每 6 小时</option>
+					<option value="0 */8 * * *" {% if cron_expression == '0 */8 * * *' %}selected{% endif %}>每 8 小时</option>
+					<option value="0 */12 * * *" {% if cron_expression == '0 */12 * * *' %}selected{% endif %}>每 12 小时</option>
+					<option value="0 0 * * *" {% if cron_expression == '0 0 * * *' %}selected{% endif %}>每天一次</option>
+					<option value="custom" {% if cron_expression not in ['0 * * * *', '0 */2 * * *', '0 */4 * * *', '0 */6 * * *', '0 */8 * * *', '0 */12 * * *', '0 0 * * *'] %}selected{% endif %}>自定义</option>
+				</select>
+			</div>
+			<input type="text" id="custom-cron" value="{{ cron_expression }}" placeholder="cron 表达式"
+				class="px-3 py-2.5 w-40 bg-white border-4 border-black text-black font-bold text-xs font-mono focus:outline-none shadow-[4px_4px_0px_#feca57] {% if cron_expression in ['0 * * * *', '0 */2 * * *', '0 */4 * * *', '0 */6 * * *', '0 */8 * * *', '0 */12 * * *', '0 0 * * *'] %}hidden{% endif %}"
+				onkeydown="if(event.key==='Enter'){saveCustomCron();}">
+			<button id="btn-save-cron" onclick="saveCustomCron()"
+				class="px-3 py-2.5 border-4 border-black bg-[#feca57] text-black font-black text-xs shadow-[4px_4px_0px_#000] transition-all duration-150 hover:bg-[#ff9ff3] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none {% if cron_expression in ['0 * * * *', '0 */2 * * *', '0 */4 * * *', '0 */6 * * *', '0 */8 * * *', '0 */12 * * *', '0 0 * * *'] %}hidden{% endif %}">
+				保存
+			</button>
+			<button onclick="runCheckinAll()" id="btn-checkin-all"
+				class="bg-[#1dd1a1] text-black px-6 py-2.5 border-4 border-black font-black text-sm shadow-[6px_6px_0px_#000] transition-all duration-150 hover:bg-[#48dbfb] hover:shadow-[8px_8px_0px_#000] active:translate-x-[6px] active:translate-y-[6px] active:shadow-none inline-flex items-center">
+				<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+				立即全部签到
+			</button>
+		</div>
+	</div>
+
+	<!-- Stats -->
+	<div class="grid grid-cols-4 gap-4 mb-8">
+		<div class="group bg-yellow-400 border-4 border-black p-5 shadow-[6px_6px_0px_#000] relative overflow-hidden transition-all duration-150 hover:shadow-[8px_8px_0px_#000]">
+			<div class="absolute -top-2 -right-2 w-8 h-8 bg-[#ff9ff3] rounded-full border-4 border-black transition-all duration-150 group-hover:translate-x-2 group-hover:-translate-y-1"></div>
+			<p class="text-xs font-black text-black">账号总数</p>
+			<p class="text-4xl font-black text-black mt-1">{{ accounts|length }}</p>
+		</div>
+		<div class="group bg-[#1dd1a1] border-4 border-black p-5 shadow-[6px_6px_0px_#000] relative overflow-hidden transition-all duration-150 hover:shadow-[8px_8px_0px_#000]">
+			<div class="absolute -bottom-1 -right-1 w-6 h-6 bg-yellow-400 border-4 border-black rotate-45 transition-all duration-150 group-hover:-translate-x-2 group-hover:rotate-[60deg]"></div>
+			<p class="text-xs font-black text-black">已启用</p>
+			<p class="text-4xl font-black text-black mt-1">{{ accounts|selectattr('enabled')|list|length }}</p>
+		</div>
+		<div class="group bg-[#48dbfb] border-4 border-black p-5 shadow-[6px_6px_0px_#000] relative overflow-hidden transition-all duration-150 hover:shadow-[8px_8px_0px_#000]">
+			<div class="absolute top-1 right-2 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-b-[12px] border-b-[#ff6b6b] transition-all duration-150 group-hover:translate-y-1 group-hover:rotate-12"></div>
+			<p class="text-xs font-black text-black">签到成功</p>
+			<p class="text-4xl font-black text-black mt-1">{{ accounts|selectattr('last_status', 'equalto', 'success')|list|length }}</p>
+		</div>
+		<div class="group bg-[#ff6b6b] border-4 border-black p-5 shadow-[6px_6px_0px_#000] relative overflow-hidden transition-all duration-150 hover:shadow-[8px_8px_0px_#000]">
+			<div class="absolute -top-1 -left-1 w-7 h-7 bg-yellow-400 rounded-full border-4 border-black transition-all duration-150 group-hover:translate-x-3 group-hover:translate-y-2"></div>
+			<p class="text-xs font-black text-white">签到失败</p>
+			<p class="text-4xl font-black text-white mt-1">{{ accounts|selectattr('last_status', 'equalto', 'failed')|list|length }}</p>
+		</div>
+	</div>
+
+	<div class="h-3 my-6 squiggle" style="background-image: url('data:image/svg+xml,%3Csvg xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22 width%3D%2240%22 height%3D%2212%22%3E%3Cpath d%3D%22M0 6c5 0 5-6 10-6s5 6 10 6 5-6 10-6 5 6 10 6%22 fill%3D%22none%22 stroke%3D%22%23000%22 stroke-width%3D%223%22%2F%3E%3C%2Fsvg%3E'); background-repeat: repeat-x; background-position: center;"></div>
+
+	<h3 class="text-xl font-black text-black mb-4 relative inline-block">
+		账号状态
+		<div class="absolute -top-1 -right-5 w-3 h-3 bg-[#5f27cd] rotate-45 border-2 border-black"></div>
+	</h3>
+	{% if accounts %}
+	<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mb-8">
+		{% set card_colors = ['bg-pink-300', 'bg-[#48dbfb]', 'bg-yellow-400', 'bg-[#1dd1a1]', 'bg-[#ff9ff3]'] %}
+		{% for acc in accounts %}
+		<div class="group border-4 border-black p-5 shadow-[6px_6px_0px_#000] {{ card_colors[loop.index0 % 5] }} relative overflow-hidden transition-all duration-150 hover:shadow-[8px_8px_0px_#000]" id="card-{{ acc.id }}">
+			<div class="absolute -top-2 -right-2 w-8 h-8 bg-[#ff6b6b] rounded-full border-4 border-black transition-all duration-150 group-hover:translate-x-4 group-hover:-translate-y-2"></div>
+			<div class="absolute bottom-2 right-3 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[10px] border-t-[#5f27cd] transition-all duration-150 group-hover:-translate-x-2 group-hover:rotate-12"></div>
+			<div class="flex items-center justify-between mb-3">
+				<div class="flex items-center">
+					<span class="w-4 h-4 border-4 border-black mr-2 {% if acc.enabled %}bg-[#1dd1a1]{% else %}bg-white{% endif %}"></span>
+					<h4 class="font-black text-black text-sm transition-colors duration-150 group-hover:text-[#ff6b6b]">{{ acc.name }}</h4>
+				</div>
+				<span class="text-xs px-2 py-1 border-4 border-black font-black
+					{% if acc.last_status == 'success' %}bg-[#1dd1a1] text-black
+					{% elif acc.last_status == 'failed' %}bg-[#ff6b6b] text-white
+					{% else %}bg-white text-black{% endif %}">
+					{% if acc.last_status == 'success' %}成功{% elif acc.last_status == 'failed' %}失败{% else %}未签到{% endif %}
+				</span>
+			</div>
+			<div class="space-y-1.5 text-xs font-bold text-black">
+				<div class="flex justify-between"><span>Provider</span><span>{{ acc.provider }}</span></div>
+				<div class="flex justify-between"><span>认证</span><span>{% if acc.auth_method == 'browser_login' %}浏览器登录{% else %}Cookie{% endif %}</span></div>
+				<div class="flex justify-between"><span>余额</span><span class="font-black">{{ '$%.2f'|format(acc.last_balance) if acc.last_balance is not none else '-' }}</span></div>
+				<div class="flex justify-between"><span>已用</span><span>{{ '$%.2f'|format(acc.last_used) if acc.last_used is not none else '-' }}</span></div>
+				<div class="flex justify-between"><span>上次签到</span><span>{{ acc.last_checkin[:16] if acc.last_checkin else '-' }}</span></div>
+			</div>
+			<div class="mt-4 pt-3 border-t-4 border-black">
+				<button onclick="runCheckinSingle({{ acc.id }})"
+					class="bg-white text-black px-4 py-1.5 border-4 border-black font-black text-xs shadow-[3px_3px_0px_#000] transition-all duration-150 hover:bg-[#feca57] hover:shadow-[5px_5px_0px_#000] active:translate-x-[3px] active:translate-y-[3px] active:shadow-none">
+					手动签到
+				</button>
+			</div>
+		</div>
+		{% endfor %}
+	</div>
+	{% else %}
+	<div class="border-4 border-black p-10 text-center mb-8 bg-white shadow-[6px_6px_0px_#000] relative">
+		<div class="absolute top-2 right-4 w-6 h-6 bg-[#ff9ff3] rounded-full border-4 border-black"></div>
+		<p class="font-black text-black text-lg">暂无账号</p>
+		<a href="/accounts" class="mt-2 inline-block text-[#ff6b6b] font-black underline decoration-4 hover:text-[#5f27cd]">添加第一个账号</a>
+	</div>
+	{% endif %}
+
+	<div class="h-3 my-6" style="background-image: url('data:image/svg+xml,%3Csvg xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22 width%3D%2240%22 height%3D%2212%22%3E%3Cpath d%3D%22M0 6c5 0 5-6 10-6s5 6 10 6 5-6 10-6 5 6 10 6%22 fill%3D%22none%22 stroke%3D%22%23ff6b6b%22 stroke-width%3D%223%22%2F%3E%3C%2Fsvg%3E'); background-repeat: repeat-x; background-position: center;"></div>
+
+	<h3 class="text-xl font-black text-black mb-4 relative inline-block">
+		最近执行
+		<div class="absolute -top-1 -right-4 w-3 h-3 bg-[#ff6b6b] rounded-full border-2 border-black"></div>
+	</h3>
+	{% if recent_logs %}
+	<div class="border-4 border-black bg-white shadow-[6px_6px_0px_#000] overflow-hidden">
+		<table class="w-full text-sm">
+			<thead class="bg-[#feca57] border-b-4 border-black">
+				<tr>
+					<th class="text-left px-4 py-3 font-black text-black text-xs">账号</th>
+					<th class="text-left px-4 py-3 font-black text-black text-xs">Provider</th>
+					<th class="text-left px-4 py-3 font-black text-black text-xs">状态</th>
+					<th class="text-left px-4 py-3 font-black text-black text-xs">余额</th>
+					<th class="text-left px-4 py-3 font-black text-black text-xs">触发</th>
+					<th class="text-left px-4 py-3 font-black text-black text-xs">时间</th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for log in recent_logs %}
+				<tr class="border-b-4 border-black {% if loop.index is odd %}bg-white{% else %}bg-pink-100{% endif %}">
+					<td class="px-4 py-3 font-bold text-black">{{ log.account_name }}</td>
+					<td class="px-4 py-3 font-bold text-black">{{ log.provider }}</td>
+					<td class="px-4 py-3">
+						<span class="inline-flex px-2 py-1 border-4 border-black text-xs font-black
+							{% if log.status == 'success' %}bg-[#1dd1a1] text-black{% else %}bg-[#ff6b6b] text-white{% endif %}">
+							{% if log.status == 'success' %}成功{% else %}失败{% endif %}
+						</span>
+					</td>
+					<td class="px-4 py-3 font-black text-black">{{ '$%.2f'|format(log.balance) if log.balance is not none else '-' }}</td>
+					<td class="px-4 py-3">
+						<span class="font-bold text-xs {% if log.triggered_by == 'manual' %}text-[#5f27cd]{% else %}text-black{% endif %}">{% if log.triggered_by == 'manual' %}手动{% else %}定时{% endif %}</span>
+					</td>
+					<td class="px-4 py-3 font-bold text-black text-xs">{{ log.created_at[:16] }}</td>
+				</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
+	{% else %}
+	<div class="border-4 border-black p-10 text-center bg-white shadow-[6px_6px_0px_#000]">
+		<p class="font-black text-black">暂无执行记录</p>
+	</div>
+	{% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const presetCrons = ['0 * * * *', '0 */2 * * *', '0 */4 * * *', '0 */6 * * *', '0 */8 * * *', '0 */12 * * *', '0 0 * * *'];
+
+function updateSchedule() {
+	const sel = document.getElementById('schedule-select');
+	const customInput = document.getElementById('custom-cron');
+	const saveBtn = document.getElementById('btn-save-cron');
+	if (sel.value === 'custom') {
+		customInput.classList.remove('hidden');
+		saveBtn.classList.remove('hidden');
+		customInput.focus();
+		return;
+	}
+	customInput.classList.add('hidden');
+	saveBtn.classList.add('hidden');
+	applySchedule(sel.value);
+}
+
+function saveCustomCron() {
+	const val = document.getElementById('custom-cron').value.trim();
+	if (!val) { showToast('请输入 cron 表达式', 'error'); return; }
+	applySchedule(val);
+}
+
+async function applySchedule(cronExpr) {
+	try {
+		const res = await fetch('/api/settings/schedule', {
+			method: 'POST',
+			headers: {'Content-Type': 'application/json'},
+			body: JSON.stringify({cron_expression: cronExpr})
+		});
+		const result = await res.json();
+		if (result.success) {
+			showToast('签到间隔已更新', 'success');
+			if (result.next_run) {
+				document.getElementById('next-run-text').textContent = result.next_run;
+			}
+		} else {
+			showToast(result.message || '更新失败', 'error');
+		}
+	} catch (e) {
+		showToast('请求失败: ' + e.message, 'error');
+	}
+}
+</script>
+{% endblock %}

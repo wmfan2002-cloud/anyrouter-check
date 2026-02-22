@@ -7,3 +7,5 @@ __pycache__
 balance_hash.txt
 
 .DS_Store
+data/
+PLAN.md

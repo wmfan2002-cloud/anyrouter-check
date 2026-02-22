@@ -1,0 +1,268 @@
+{% extends "base.html" %}
+{% block title %}账号管理 - AnyRouter Check-in{% endblock %}
+{% block content %}
+<div class="max-w-5xl">
+	<div class="flex items-center justify-between mb-8">
+		<div class="relative">
+			<h2 class="text-3xl font-black tracking-tight text-black">账号管理</h2>
+			<div class="absolute -top-2 -left-4 w-4 h-4 bg-[#48dbfb] rounded-full border-2 border-black"></div>
+		</div>
+		<button onclick="showAddModal()"
+			class="bg-[#feca57] text-black px-6 py-3 border-4 border-black font-black text-sm shadow-[6px_6px_0px_#000] transition-all duration-150 hover:bg-pink-400 hover:shadow-[8px_8px_0px_#000] active:translate-x-[6px] active:translate-y-[6px] active:shadow-none inline-flex items-center">
+			<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+			添加账号
+		</button>
+	</div>
+
+	{% if accounts %}
+	<div class="border-4 border-black bg-white shadow-[8px_8px_0px_#000] overflow-hidden">
+		<table class="w-full text-sm">
+			<thead class="bg-[#48dbfb] border-b-4 border-black">
+				<tr>
+					<th class="text-left px-4 py-3 font-black text-black text-xs">名称</th>
+					<th class="text-left px-4 py-3 font-black text-black text-xs">Provider</th>
+					<th class="text-left px-4 py-3 font-black text-black text-xs">认证方式</th>
+					<th class="text-left px-4 py-3 font-black text-black text-xs">状态</th>
+					<th class="text-left px-4 py-3 font-black text-black text-xs">余额</th>
+					<th class="text-left px-4 py-3 font-black text-black text-xs">上次签到</th>
+					<th class="text-right px-4 py-3 font-black text-black text-xs">操作</th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for acc in accounts %}
+				<tr id="row-{{ acc.id }}" class="border-b-4 border-black {% if loop.index is odd %}bg-white{% else %}bg-yellow-100{% endif %}">
+					<td class="px-4 py-3">
+						<div class="flex items-center">
+							<span class="w-4 h-4 border-4 border-black mr-2 {% if acc.enabled %}bg-[#1dd1a1]{% else %}bg-white{% endif %}"></span>
+							<span class="font-black text-black">{{ acc.name }}</span>
+						</div>
+					</td>
+					<td class="px-4 py-3 font-bold text-black">{{ acc.provider }}</td>
+					<td class="px-4 py-3">
+						{% if acc.auth_method == 'browser_login' %}
+						<span class="inline-flex px-2 py-0.5 border-4 border-black text-xs font-black bg-[#5f27cd] text-white">浏览器登录</span>
+						{% else %}
+						<span class="inline-flex px-2 py-0.5 border-4 border-black text-xs font-black bg-[#feca57] text-black">Cookie</span>
+						{% endif %}
+					</td>
+					<td class="px-4 py-3">
+						<span class="inline-flex px-2 py-0.5 border-4 border-black text-xs font-black
+							{% if acc.last_status == 'success' %}bg-[#1dd1a1] text-black
+							{% elif acc.last_status == 'failed' %}bg-[#ff6b6b] text-white
+							{% else %}bg-white text-black{% endif %}">
+							{% if acc.last_status == 'success' %}成功{% elif acc.last_status == 'failed' %}失败{% else %}未签到{% endif %}
+						</span>
+					</td>
+					<td class="px-4 py-3 font-black text-black">{{ '$%.2f'|format(acc.last_balance) if acc.last_balance is not none else '-' }}</td>
+					<td class="px-4 py-3 font-bold text-black text-xs">{{ acc.last_checkin[:16] if acc.last_checkin else '-' }}</td>
+					<td class="px-4 py-3 text-right space-x-1">
+						<button onclick="toggleAccount({{ acc.id }})"
+							class="px-2 py-1 border-4 border-black text-xs font-black shadow-[2px_2px_0px_#000] transition-all duration-150 active:translate-x-[2px] active:translate-y-[2px] active:shadow-none
+							{% if acc.enabled %}bg-[#feca57] hover:bg-[#ff9ff3]{% else %}bg-[#1dd1a1] hover:bg-[#48dbfb]{% endif %}">
+							{{ '禁用' if acc.enabled else '启用' }}
+						</button>
+						<button onclick='showEditModal({{ acc|tojson }})'
+							class="px-2 py-1 border-4 border-black text-xs font-black bg-[#48dbfb] shadow-[2px_2px_0px_#000] transition-all duration-150 hover:bg-[#ff9ff3] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none">
+							编辑
+						</button>
+						<button onclick="deleteAccount({{ acc.id }}, '{{ acc.name }}')"
+							class="px-2 py-1 border-4 border-black text-xs font-black bg-[#ff6b6b] text-white shadow-[2px_2px_0px_#000] transition-all duration-150 hover:bg-[#ff9ff3] hover:text-black active:translate-x-[2px] active:translate-y-[2px] active:shadow-none">
+							删除
+						</button>
+					</td>
+				</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
+	{% else %}
+	<div class="border-4 border-black p-12 text-center bg-pink-300 shadow-[8px_8px_0px_#000] relative">
+		<div class="absolute top-3 right-6 w-8 h-8 bg-[#48dbfb] rounded-full border-4 border-black"></div>
+		<div class="absolute bottom-3 left-6 w-6 h-6 bg-[#feca57] border-4 border-black rotate-45"></div>
+		<p class="font-black text-black text-xl mb-2">暂无账号</p>
+		<button onclick="showAddModal()" class="text-[#5f27cd] font-black underline decoration-4 hover:text-[#ff6b6b] text-lg">添加第一个账号</button>
+	</div>
+	{% endif %}
+</div>
+
+<!-- Add/Edit Modal -->
+<div id="account-modal" class="fixed inset-0 bg-black/60 z-50 hidden items-center justify-center" onclick="if(event.target===this)closeModal()">
+	<div class="bg-[#feca57] border-4 border-black shadow-[8px_8px_0px_#000] w-full max-w-lg mx-4 p-6 relative">
+		<div class="absolute -top-4 -right-4 w-10 h-10 bg-[#ff6b6b] rounded-full border-4 border-black"></div>
+		<div class="absolute -bottom-3 -left-3 w-8 h-8 bg-[#48dbfb] border-4 border-black rotate-45"></div>
+		<h3 id="modal-title" class="text-xl font-black text-black mb-5">添加账号</h3>
+		<form id="account-form" onsubmit="submitAccount(event)">
+			<input type="hidden" id="edit-id" value="">
+			<div class="space-y-4">
+				<div>
+					<label class="block text-sm font-black text-black mb-1">名称</label>
+					<input type="text" id="field-name" required
+						class="w-full px-4 py-2.5 bg-white border-4 border-black text-black font-bold placeholder:text-black/30 focus:outline-none shadow-[4px_4px_0px_#48dbfb] transition-all duration-150 focus:shadow-[4px_4px_0px_#ff6b6b]"
+						placeholder="例如：我的账号1">
+				</div>
+				<div>
+					<label class="block text-sm font-black text-black mb-1">Provider</label>
+					<select id="field-provider"
+						class="w-full px-4 py-2.5 bg-white border-4 border-black text-black font-bold focus:outline-none shadow-[4px_4px_0px_#48dbfb]">
+						{% for p in providers %}
+						<option value="{{ p.name }}">{{ p.name }} ({{ p.domain }})</option>
+						{% endfor %}
+					</select>
+				</div>
+				<div>
+					<label class="block text-sm font-black text-black mb-2">认证方式</label>
+					<div class="flex border-4 border-black overflow-hidden">
+						<button type="button" id="tab-cookie" onclick="switchAuthMethod('cookie')"
+							class="flex-1 px-4 py-2.5 font-black text-sm transition-colors duration-150 bg-[#ff6b6b] text-white border-r-4 border-black">
+							Cookie 模式
+						</button>
+						<button type="button" id="tab-browser" onclick="switchAuthMethod('browser_login')"
+							class="flex-1 px-4 py-2.5 font-black text-sm transition-colors duration-150 bg-white text-black">
+							浏览器登录
+						</button>
+					</div>
+				</div>
+				<input type="hidden" id="field-auth-method" value="cookie">
+				<div id="cookie-fields">
+					<div class="space-y-4">
+						<div>
+							<label class="block text-sm font-black text-black mb-1">Cookies</label>
+							<textarea id="field-cookies" rows="3"
+								class="w-full px-4 py-2.5 bg-white border-4 border-black text-black font-bold font-mono text-xs placeholder:text-black/30 focus:outline-none shadow-[4px_4px_0px_#ff9ff3] transition-all duration-150 focus:shadow-[4px_4px_0px_#ff6b6b]"
+								placeholder='JSON格式: {"session":"xxx"} 或字符串: session=xxx;key=value'></textarea>
+						</div>
+						<div>
+							<label class="block text-sm font-black text-black mb-1">API User ID</label>
+							<input type="text" id="field-api-user"
+								class="w-full px-4 py-2.5 bg-white border-4 border-black text-black font-bold font-mono placeholder:text-black/30 focus:outline-none shadow-[4px_4px_0px_#ff9ff3] transition-all duration-150 focus:shadow-[4px_4px_0px_#ff6b6b]"
+								placeholder="5位数字ID">
+						</div>
+					</div>
+				</div>
+				<div id="browser-fields" class="hidden">
+					<div class="space-y-4">
+						<div class="p-3 bg-[#5f27cd] border-4 border-black shadow-[3px_3px_0px_#000]">
+							<p class="text-xs font-bold text-white">通过无头浏览器自动登录，登录成功后自动完成签到。无需手动提取 Cookie。</p>
+						</div>
+						<div>
+							<label class="block text-sm font-black text-black mb-1">用户名 / 邮箱</label>
+							<input type="text" id="field-username"
+								class="w-full px-4 py-2.5 bg-white border-4 border-black text-black font-bold placeholder:text-black/30 focus:outline-none shadow-[4px_4px_0px_#1dd1a1] transition-all duration-150 focus:shadow-[4px_4px_0px_#ff6b6b]"
+								placeholder="登录用户名或邮箱">
+						</div>
+						<div>
+							<label class="block text-sm font-black text-black mb-1">密码</label>
+							<input type="password" id="field-password"
+								class="w-full px-4 py-2.5 bg-white border-4 border-black text-black font-bold placeholder:text-black/30 focus:outline-none shadow-[4px_4px_0px_#1dd1a1] transition-all duration-150 focus:shadow-[4px_4px_0px_#ff6b6b]"
+								placeholder="登录密码">
+						</div>
+					</div>
+				</div>
+			</div>
+			<div class="flex justify-end space-x-3 mt-6">
+				<button type="button" onclick="closeModal()"
+					class="px-5 py-2.5 border-4 border-black bg-white text-black font-black text-sm shadow-[4px_4px_0px_#000] transition-all duration-150 hover:bg-pink-300 hover:shadow-[6px_6px_0px_#000] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none">
+					取消
+				</button>
+				<button type="submit"
+					class="px-5 py-2.5 border-4 border-black bg-[#1dd1a1] text-black font-black text-sm shadow-[4px_4px_0px_#000] transition-all duration-150 hover:bg-[#48dbfb] hover:shadow-[6px_6px_0px_#000] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none">
+					保存
+				</button>
+			</div>
+		</form>
+	</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function switchAuthMethod(method) {
+	document.getElementById('field-auth-method').value = method;
+	const cookieFields = document.getElementById('cookie-fields');
+	const browserFields = document.getElementById('browser-fields');
+	const tabCookie = document.getElementById('tab-cookie');
+	const tabBrowser = document.getElementById('tab-browser');
+	if (method === 'browser_login') {
+		cookieFields.classList.add('hidden');
+		browserFields.classList.remove('hidden');
+		tabCookie.className = 'flex-1 px-4 py-2.5 font-black text-sm transition-colors duration-150 bg-white text-black border-r-4 border-black';
+		tabBrowser.className = 'flex-1 px-4 py-2.5 font-black text-sm transition-colors duration-150 bg-[#5f27cd] text-white';
+	} else {
+		cookieFields.classList.remove('hidden');
+		browserFields.classList.add('hidden');
+		tabCookie.className = 'flex-1 px-4 py-2.5 font-black text-sm transition-colors duration-150 bg-[#ff6b6b] text-white border-r-4 border-black';
+		tabBrowser.className = 'flex-1 px-4 py-2.5 font-black text-sm transition-colors duration-150 bg-white text-black';
+	}
+}
+function showAddModal() {
+	document.getElementById('modal-title').textContent = '添加账号';
+	document.getElementById('edit-id').value = '';
+	document.getElementById('field-name').value = '';
+	document.getElementById('field-provider').value = 'anyrouter';
+	document.getElementById('field-cookies').value = '';
+	document.getElementById('field-api-user').value = '';
+	document.getElementById('field-username').value = '';
+	document.getElementById('field-password').value = '';
+	switchAuthMethod('cookie');
+	document.getElementById('account-modal').classList.remove('hidden');
+	document.getElementById('account-modal').classList.add('flex');
+}
+function showEditModal(acc) {
+	document.getElementById('modal-title').textContent = '编辑账号';
+	document.getElementById('edit-id').value = acc.id;
+	document.getElementById('field-name').value = acc.name;
+	document.getElementById('field-provider').value = acc.provider;
+	const method = acc.auth_method || 'cookie';
+	switchAuthMethod(method);
+	if (method === 'browser_login') {
+		document.getElementById('field-username').value = acc.username || '';
+		document.getElementById('field-password').value = acc.password || '';
+		document.getElementById('field-cookies').value = '';
+		document.getElementById('field-api-user').value = '';
+	} else {
+		document.getElementById('field-cookies').value = typeof acc.cookies === 'object' ? JSON.stringify(acc.cookies) : (acc.cookies || '');
+		document.getElementById('field-api-user').value = acc.api_user || '';
+		document.getElementById('field-username').value = '';
+		document.getElementById('field-password').value = '';
+	}
+	document.getElementById('account-modal').classList.remove('hidden');
+	document.getElementById('account-modal').classList.add('flex');
+}
+function closeModal() {
+	document.getElementById('account-modal').classList.add('hidden');
+	document.getElementById('account-modal').classList.remove('flex');
+}
+async function submitAccount(e) {
+	e.preventDefault();
+	const id = document.getElementById('edit-id').value;
+	const authMethod = document.getElementById('field-auth-method').value;
+	const data = { name: document.getElementById('field-name').value, provider: document.getElementById('field-provider').value, auth_method: authMethod };
+	if (authMethod === 'browser_login') {
+		data.username = document.getElementById('field-username').value;
+		data.password = document.getElementById('field-password').value;
+	} else {
+		data.cookies = document.getElementById('field-cookies').value;
+		data.api_user = document.getElementById('field-api-user').value;
+	}
+	const url = id ? `/api/accounts/${id}` : '/api/accounts';
+	const method = id ? 'PUT' : 'POST';
+	const res = await fetch(url, { method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) });
+	const result = await res.json();
+	if (result.success) { showToast(id ? '账号已更新' : '账号已添加', 'success'); setTimeout(() => location.reload(), 500); }
+	else { showToast(result.message || '操作失败', 'error'); }
+}
+async function deleteAccount(id, name) {
+	if (!confirm(`确定删除账号 "${name}" 吗？`)) return;
+	const res = await fetch(`/api/accounts/${id}`, { method: 'DELETE' });
+	const result = await res.json();
+	if (result.success) { showToast('账号已删除', 'success'); setTimeout(() => location.reload(), 500); }
+	else { showToast(result.message || '删除失败', 'error'); }
+}
+async function toggleAccount(id) {
+	const res = await fetch(`/api/accounts/${id}/toggle`, { method: 'POST' });
+	const result = await res.json();
+	if (result.success) { showToast('状态已切换', 'success'); setTimeout(() => location.reload(), 500); }
+	else { showToast(result.message || '操作失败', 'error'); }
+}
+</script>
+{% endblock %}

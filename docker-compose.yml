@@ -1,0 +1,30 @@
+services:
+  checkin:
+    build: .
+    container_name: anyrouter-checkin
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - TZ=Asia/Shanghai
+      - ADMIN_PASSWORD=anyanyany
+      # --- 通知配置（可选，按需取消注释） ---
+      # - TELEGRAM_BOT_TOKEN=
+      # - TELEGRAM_CHAT_ID=
+      # - DINGDING_WEBHOOK=
+      # - FEISHU_WEBHOOK=
+      # - WEIXIN_WEBHOOK=
+      # - PUSHPLUS_TOKEN=
+      # - SERVERPUSHKEY=
+      # - EMAIL_USER=
+      # - EMAIL_PASS=
+      # - EMAIL_TO=
+      # - EMAIL_SENDER=
+      # - CUSTOM_SMTP_SERVER=
+      # - GOTIFY_URL=
+      # - GOTIFY_TOKEN=
+      # - GOTIFY_PRIORITY=9
+      # - BARK_KEY=
+      # - BARK_SERVER=
+    restart: unless-stopped

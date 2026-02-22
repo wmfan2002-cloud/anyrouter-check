@@ -1,0 +1,17 @@
+.git
+.github
+.venv
+__pycache__
+*.pyc
+*.pyo
+.env
+.ruff_cache
+.pytest_cache
+data/
+assets/
+tests/
+*.md
+LICENSE
+.pre-commit-config.yaml
+.gitattributes
+PLAN.md

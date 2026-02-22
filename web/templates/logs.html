@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}执行日志 - AnyRouter Check-in{% endblock %}
+{% block content %}
+<div class="max-w-5xl">
+	<div class="flex items-center justify-between mb-8">
+		<div class="relative">
+			<h2 class="text-3xl font-black tracking-tight text-black">执行日志</h2>
+			<div class="absolute -top-2 -left-4 w-4 h-4 bg-[#ff9ff3] rounded-full border-2 border-black"></div>
+		</div>
+		<div class="flex items-center space-x-3">
+			<select id="filter-status" onchange="applyFilter()"
+				class="px-4 py-2.5 bg-white border-4 border-black text-black font-black text-sm focus:outline-none shadow-[4px_4px_0px_#ff9ff3]">
+				<option value="">全部状态</option>
+				<option value="success" {% if filter_status == 'success' %}selected{% endif %}>成功</option>
+				<option value="failed" {% if filter_status == 'failed' %}selected{% endif %}>失败</option>
+			</select>
+			<select id="filter-account" onchange="applyFilter()"
+				class="px-4 py-2.5 bg-white border-4 border-black text-black font-black text-sm focus:outline-none shadow-[4px_4px_0px_#48dbfb]">
+				<option value="">全部账号</option>
+				{% for acc in accounts %}
+				<option value="{{ acc.id }}" {% if filter_account == acc.id|string %}selected{% endif %}>{{ acc.name }}</option>
+				{% endfor %}
+			</select>
+		</div>
+	</div>
+
+	{% if logs %}
+	<div class="border-4 border-black bg-white shadow-[8px_8px_0px_#000] overflow-hidden">
+		<table class="w-full text-sm">
+			<thead class="bg-[#ff9ff3] border-b-4 border-black">
+				<tr>
+					<th class="text-left px-4 py-3 font-black text-black text-xs">时间</th>
+					<th class="text-left px-4 py-3 font-black text-black text-xs">账号</th>
+					<th class="text-left px-4 py-3 font-black text-black text-xs">Provider</th>
+					<th class="text-left px-4 py-3 font-black text-black text-xs">状态</th>
+					<th class="text-left px-4 py-3 font-black text-black text-xs">余额</th>
+					<th class="text-left px-4 py-3 font-black text-black text-xs">已用</th>
+					<th class="text-left px-4 py-3 font-black text-black text-xs">触发</th>
+					<th class="text-left px-4 py-3 font-black text-black text-xs">信息</th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for log in logs %}
+				<tr class="border-b-4 border-black {% if loop.index is odd %}bg-white{% else %}bg-pink-100{% endif %}">
+					<td class="px-4 py-3 font-bold text-black text-xs whitespace-nowrap">{{ log.created_at[:19] }}</td>
+					<td class="px-4 py-3 font-black text-black">{{ log.account_name }}</td>
+					<td class="px-4 py-3 font-bold text-black">{{ log.provider }}</td>
+					<td class="px-4 py-3">
+						<span class="inline-flex px-2 py-0.5 border-4 border-black text-xs font-black
+							{% if log.status == 'success' %}bg-[#1dd1a1] text-black{% else %}bg-[#ff6b6b] text-white{% endif %}">
+							{% if log.status == 'success' %}成功{% else %}失败{% endif %}
+						</span>
+					</td>
+					<td class="px-4 py-3 font-black text-black">{{ '$%.2f'|format(log.balance) if log.balance is not none else '-' }}</td>
+					<td class="px-4 py-3 font-bold text-black">{{ '$%.2f'|format(log.used_quota) if log.used_quota is not none else '-' }}</td>
+					<td class="px-4 py-3">
+						<span class="font-black text-xs {% if log.triggered_by == 'manual' %}text-[#5f27cd]{% else %}text-black{% endif %}">
+							{% if log.triggered_by == 'manual' %}手动{% else %}定时{% endif %}
+						</span>
+					</td>
+					<td class="px-4 py-3 font-bold text-black text-xs max-w-xs truncate" title="{{ log.message or '' }}">{{ log.message or '-' }}</td>
+				</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
+
+	{% if total_pages > 1 %}
+	<div class="flex justify-center mt-6 space-x-2">
+		{% for p in range(1, total_pages + 1) %}
+		<a href="/logs?page={{ p }}&status={{ filter_status or '' }}&account_id={{ filter_account or '' }}"
+			class="px-4 py-2 border-4 border-black font-black text-sm transition-all duration-150 active:translate-x-[3px] active:translate-y-[3px] active:shadow-none
+			{% if p == current_page %}bg-[#ff6b6b] text-white shadow-[4px_4px_0px_#000]{% else %}bg-white text-black shadow-[4px_4px_0px_#000] hover:bg-[#feca57] hover:shadow-[6px_6px_0px_#000]{% endif %}">
+			{{ p }}
+		</a>
+		{% endfor %}
+	</div>
+	{% endif %}
+
+	{% else %}
+	<div class="border-4 border-black p-12 text-center bg-[#48dbfb] shadow-[8px_8px_0px_#000] relative">
+		<div class="absolute top-3 right-6 w-6 h-6 bg-[#feca57] rounded-full border-4 border-black"></div>
+		<div class="absolute bottom-3 left-6 w-0 h-0 border-l-[10px] border-l-transparent border-r-[10px] border-r-transparent border-b-[14px] border-b-[#ff6b6b]"></div>
+		<p class="font-black text-black text-xl">暂无执行记录</p>
+	</div>
+	{% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function applyFilter() {
+	const status = document.getElementById('filter-status').value;
+	const account = document.getElementById('filter-account').value;
+	const params = new URLSearchParams();
+	if (status) params.set('status', status);
+	if (account) params.set('account_id', account);
+	window.location.href = '/logs?' + params.toString();
+}
+</script>
+{% endblock %}
