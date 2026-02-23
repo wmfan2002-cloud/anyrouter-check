@@ -8,16 +8,43 @@ from zoneinfo import ZoneInfo
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from utils.config import ProviderConfig, AccountConfig
+from utils.config import AccountConfig, ProviderConfig
 from web.database import (
-	get_enabled_accounts, get_all_providers, get_account,
-	update_account, add_checkin_log, get_setting, set_setting,
+	add_checkin_log,
+	get_all_providers,
+	get_enabled_accounts,
+	get_setting,
+	set_setting,
+	update_account,
 )
 
 logger = logging.getLogger('checkin')
 _tz = ZoneInfo(os.environ.get('TZ', 'Asia/Shanghai'))
 scheduler = AsyncIOScheduler(timezone=_tz)
 _checkin_lock = asyncio.Lock()
+
+
+def _is_already_checked_in_message(message: str | None) -> bool:
+	if not message:
+		return False
+
+	text = str(message).strip().lower()
+	keywords = [
+		'already checked in',
+		'already check in',
+		'already signed in',
+		'already_checked_in',
+		'已经签到',
+		'已签到',
+		'重复签到',
+	]
+	return any(keyword in text for keyword in keywords)
+
+
+def _normalize_status(success: bool, message: str | None) -> tuple[str, bool]:
+	if _is_already_checked_in_message(message):
+		return 'already_checked_in', True
+	return ('success', True) if success else ('failed', False)
 
 
 def start_scheduler():
@@ -141,7 +168,8 @@ async def _run_browser_login_checkin(account_row: dict, triggered_by: str) -> di
 			user_info_path=provider_config.user_info_path,
 		)
 
-		status = 'success' if result['success'] else 'failed'
+		message = result.get('message', '')
+		status, success_flag = _normalize_status(result.get('success', False), message)
 		update_data = {
 			'last_checkin': datetime.now().isoformat(),
 			'last_status': status,
@@ -159,11 +187,11 @@ async def _run_browser_login_checkin(account_row: dict, triggered_by: str) -> di
 			status=status,
 			balance=result.get('quota'),
 			used_quota=result.get('used_quota'),
-			message=result.get('message', ''),
+			message=message,
 			triggered_by=triggered_by,
 		)
 
-		return {'success': result['success'], 'message': result.get('message', '')}
+		return {'success': success_flag, 'message': message}
 
 	except Exception as e:
 		msg = str(e)[:200]
@@ -208,12 +236,28 @@ async def _run_cookie_checkin(account_row: dict, triggered_by: str) -> dict:
 
 		balance = user_info.get('quota') if user_info and user_info.get('success') else None
 		used = user_info.get('used_quota') if user_info and user_info.get('success') else None
-		status = 'success' if success else 'failed'
 		msg = ''
-		if user_info and user_info.get('success'):
+		checkin_status = user_info.get('checkin_status') if user_info else None
+		checkin_message = user_info.get('checkin_message', '') if user_info else ''
+
+		if checkin_status == 'already_checked_in':
+			status = 'already_checked_in'
+			success = True
+		elif checkin_status == 'failed':
+			status = 'failed'
+			success = False
+		else:
+			status, success = _normalize_status(success, checkin_message)
+
+		if checkin_message:
+			msg = checkin_message
+		elif user_info and user_info.get('success'):
 			msg = f'Balance: ${balance}, Used: ${used}'
 		elif user_info:
 			msg = user_info.get('error', '')
+
+		if status == 'already_checked_in' and not msg:
+			msg = 'Already checked in today'
 		if not success and not msg:
 			msg = 'Check-in failed (WAF bypass or request error)'
 

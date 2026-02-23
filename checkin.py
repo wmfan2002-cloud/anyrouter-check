@@ -65,6 +65,24 @@ def parse_cookies(cookies_data):
 	return {}
 
 
+def is_already_checked_in_message(message: str | None) -> bool:
+	"""判断消息是否表示“已签到”"""
+	if not message:
+		return False
+
+	text = str(message).strip().lower()
+	keywords = [
+		'already checked in',
+		'already check in',
+		'already signed in',
+		'already_checked_in',
+		'已经签到',
+		'已签到',
+		'重复签到',
+	]
+	return any(keyword in text for keyword in keywords)
+
+
 async def get_waf_cookies_with_playwright(account_name: str, login_url: str, required_cookies: list[str]):
 	"""使用 Playwright 获取 WAF cookies（隐私模式）"""
 	print(f'[PROCESSING] {account_name}: Starting browser to get WAF cookies...')
@@ -167,7 +185,7 @@ async def prepare_cookies(account_name: str, provider_config, user_cookies: dict
 	return {**waf_cookies, **user_cookies}
 
 
-def execute_check_in(client, account_name: str, provider_config, headers: dict):
+def execute_check_in(client, account_name: str, provider_config, headers: dict) -> dict:
 	"""执行签到请求"""
 	print(f'[NETWORK] {account_name}: Executing check-in')
 
@@ -179,27 +197,54 @@ def execute_check_in(client, account_name: str, provider_config, headers: dict):
 
 	print(f'[RESPONSE] {account_name}: Response status code {response.status_code}')
 
-	if response.status_code == 200:
-		try:
-			result = response.json()
-			if result.get('ret') == 1 or result.get('code') == 0 or result.get('success'):
-				print(f'[SUCCESS] {account_name}: Check-in successful!')
-				return True
-			else:
-				error_msg = result.get('msg', result.get('message', 'Unknown error'))
-				print(f'[FAILED] {account_name}: Check-in failed - {error_msg}')
-				return False
-		except json.JSONDecodeError:
-			# 如果不是 JSON 响应，检查是否包含成功标识
-			if 'success' in response.text.lower():
-				print(f'[SUCCESS] {account_name}: Check-in successful!')
-				return True
-			else:
-				print(f'[FAILED] {account_name}: Check-in failed - Invalid response format')
-				return False
-	else:
-		print(f'[FAILED] {account_name}: Check-in failed - HTTP {response.status_code}')
-		return False
+	if response.status_code != 200:
+		error_msg = f'Check-in failed - HTTP {response.status_code}'
+		print(f'[FAILED] {account_name}: {error_msg}')
+		return {'success': False, 'status': 'failed', 'message': error_msg}
+
+	try:
+		result = response.json()
+		raw_msg = result.get('msg') or result.get('message') or result.get('error') or ''
+
+		if result.get('ret') == 1 or result.get('code') == 0 or result.get('success'):
+			print(f'[SUCCESS] {account_name}: Check-in successful!')
+			return {
+				'success': True,
+				'status': 'success',
+				'message': raw_msg or 'Check-in successful',
+			}
+
+		if is_already_checked_in_message(raw_msg):
+			print(f'[INFO] {account_name}: Already checked in - {raw_msg}')
+			return {
+				'success': True,
+				'status': 'already_checked_in',
+				'message': raw_msg,
+			}
+
+		error_msg = raw_msg or 'Unknown error'
+		print(f'[FAILED] {account_name}: Check-in failed - {error_msg}')
+		return {'success': False, 'status': 'failed', 'message': error_msg}
+	except json.JSONDecodeError:
+		response_text = response.text or ''
+		if is_already_checked_in_message(response_text):
+			print(f'[INFO] {account_name}: Already checked in')
+			return {
+				'success': True,
+				'status': 'already_checked_in',
+				'message': response_text[:200],
+			}
+		if 'success' in response_text.lower():
+			print(f'[SUCCESS] {account_name}: Check-in successful!')
+			return {
+				'success': True,
+				'status': 'success',
+				'message': 'Check-in successful',
+			}
+
+		error_msg = 'Check-in failed - Invalid response format'
+		print(f'[FAILED] {account_name}: {error_msg}')
+		return {'success': False, 'status': 'failed', 'message': error_msg}
 
 
 async def check_in_account(account: AccountConfig, account_index: int, app_config: AppConfig):
@@ -250,8 +295,16 @@ async def check_in_account(account: AccountConfig, account_index: int, app_confi
 			print(user_info.get('error', 'Unknown error'))
 
 		if provider_config.needs_manual_check_in():
-			success = execute_check_in(client, account_name, provider_config, headers)
-			return success, user_info
+			check_in_result = execute_check_in(client, account_name, provider_config, headers)
+			user_info_dict = user_info.copy() if isinstance(user_info, dict) else {}
+			user_info_dict['checkin_status'] = check_in_result['status']
+			user_info_dict['checkin_message'] = check_in_result['message']
+
+			if check_in_result['status'] == 'failed':
+				user_info_dict['success'] = False
+				user_info_dict['error'] = check_in_result['message']
+
+			return check_in_result['success'], user_info_dict
 		else:
 			print(f'[INFO] {account_name}: Check-in completed automatically (triggered by user info request)')
 			return True, user_info
