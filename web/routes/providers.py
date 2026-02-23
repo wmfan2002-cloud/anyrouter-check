@@ -1,14 +1,44 @@
-import json
+import re
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from web.database import (
-	get_all_providers, get_provider, create_provider,
-	update_provider, delete_provider,
+	create_provider,
+	delete_provider,
+	get_all_providers,
+	get_provider,
+	update_provider,
 )
 
 router = APIRouter()
+_COOKIE_NAME_PATTERN = re.compile(r'^[A-Za-z0-9_-]+$')
+
+
+def _is_valid_domain(domain: str) -> bool:
+	if not domain:
+		return False
+
+	parsed = urlparse(domain.strip())
+	return parsed.scheme in {'http', 'https'} and bool(parsed.netloc)
+
+
+def _normalize_waf_cookie_names(raw) -> list[str]:
+	if raw is None:
+		return []
+
+	if isinstance(raw, str):
+		raw = [item.strip() for item in raw.split(',') if item.strip()]
+	elif isinstance(raw, list):
+		raw = [item.strip() for item in raw if isinstance(item, str) and item.strip()]
+	else:
+		raise ValueError('WAF Cookie 名称格式错误，请使用逗号分隔字符串或数组')
+
+	invalid = [item for item in raw if not _COOKIE_NAME_PATTERN.fullmatch(item)]
+	if invalid:
+		raise ValueError('WAF Cookie 名称只能包含字母、数字、下划线或短横线')
+	return raw
 
 
 @router.get('/providers')
@@ -30,6 +60,13 @@ async def api_create_provider(request: Request):
 
 	if not name or not domain:
 		return JSONResponse({'success': False, 'message': '请填写名称和域名'})
+	if not _is_valid_domain(domain):
+		return JSONResponse({'success': False, 'message': '域名格式不正确，请使用 http(s):// 开头的完整地址'})
+
+	try:
+		waf_cookie_names = _normalize_waf_cookie_names(data.get('waf_cookie_names', []))
+	except ValueError as e:
+		return JSONResponse({'success': False, 'message': str(e)})
 
 	existing = await get_provider(name)
 	if existing:
@@ -42,8 +79,8 @@ async def api_create_provider(request: Request):
 		sign_in_path=data.get('sign_in_path', '/api/user/sign_in'),
 		user_info_path=data.get('user_info_path', '/api/user/self'),
 		api_user_key=data.get('api_user_key', 'new-api-user'),
-		bypass_method=data.get('bypass_method') or None,
-		waf_cookie_names=data.get('waf_cookie_names', []),
+		bypass_method=(data.get('bypass_method') or '').strip() or None,
+		waf_cookie_names=waf_cookie_names,
 	)
 	return JSONResponse({'success': True})
 
@@ -60,9 +97,22 @@ async def api_update_provider(name: str, request: Request):
 	updates = {}
 	for field in ['domain', 'login_path', 'sign_in_path', 'user_info_path', 'api_user_key', 'bypass_method']:
 		if field in data:
-			updates[field] = data[field] if data[field] else None
+			value = data[field]
+			if isinstance(value, str):
+				value = value.strip()
+			updates[field] = value if value else None
+
+	if 'domain' in updates:
+		if not updates['domain']:
+			return JSONResponse({'success': False, 'message': '域名不能为空'})
+		if not _is_valid_domain(updates['domain']):
+			return JSONResponse({'success': False, 'message': '域名格式不正确，请使用 http(s):// 开头的完整地址'})
+
 	if 'waf_cookie_names' in data:
-		updates['waf_cookie_names'] = data['waf_cookie_names']
+		try:
+			updates['waf_cookie_names'] = _normalize_waf_cookie_names(data['waf_cookie_names'])
+		except ValueError as e:
+			return JSONResponse({'success': False, 'message': str(e)})
 
 	if updates:
 		await update_provider(name, **updates)

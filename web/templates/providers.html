@@ -231,13 +231,49 @@ function closeProviderModal() {
 	document.getElementById('provider-modal').classList.add('hidden');
 	document.getElementById('provider-modal').classList.remove('flex');
 }
+
+function isValidProviderDomain(domain) {
+	try {
+		const parsed = new URL(domain);
+		return (parsed.protocol === 'http:' || parsed.protocol === 'https:') && Boolean(parsed.host);
+	} catch (e) {
+		return false;
+	}
+}
+
+function normalizeWafCookieNamesInput(rawValue) {
+	const rawItems = rawValue ? rawValue.split(',').map(s => s.trim()).filter(Boolean) : [];
+	const invalid = rawItems.filter(name => !/^[A-Za-z0-9_-]+$/.test(name));
+	if (invalid.length > 0) {
+		throw new Error('WAF Cookie 名称只能包含字母、数字、下划线或短横线');
+	}
+	return rawItems;
+}
+
 async function submitProvider(e) {
 	e.preventDefault();
 	const editName = document.getElementById('provider-edit-name').value;
-	const wafStr = document.getElementById('pf-waf-cookies').value;
-	const wafCookies = wafStr ? wafStr.split(',').map(s => s.trim()).filter(Boolean) : [];
+	const name = document.getElementById('pf-name').value.trim();
+	const domain = document.getElementById('pf-domain').value.trim();
+	if (!name || !domain) {
+		showToast('请填写名称和域名', 'error');
+		return;
+	}
+	if (!isValidProviderDomain(domain)) {
+		showToast('域名格式不正确，请使用 http(s):// 开头的完整地址', 'error');
+		return;
+	}
+
+	let wafCookies = [];
+	try {
+		wafCookies = normalizeWafCookieNamesInput(document.getElementById('pf-waf-cookies').value);
+	} catch (err) {
+		showToast(err.message || 'WAF Cookie 名称格式不正确', 'error');
+		return;
+	}
+
 	const bypassValue = document.getElementById('pf-bypass').value.trim();
-	const data = { name: document.getElementById('pf-name').value, domain: document.getElementById('pf-domain').value, login_path: document.getElementById('pf-login-path').value, sign_in_path: document.getElementById('pf-signin-path').value, user_info_path: document.getElementById('pf-userinfo-path').value, api_user_key: document.getElementById('pf-api-user-key').value, bypass_method: bypassValue || null, waf_cookie_names: wafCookies };
+	const data = { name, domain, login_path: document.getElementById('pf-login-path').value, sign_in_path: document.getElementById('pf-signin-path').value, user_info_path: document.getElementById('pf-userinfo-path').value, api_user_key: document.getElementById('pf-api-user-key').value, bypass_method: bypassValue || null, waf_cookie_names: wafCookies };
 	const url = editName ? `/api/providers/${editName}` : '/api/providers';
 	const method = editName ? 'PUT' : 'POST';
 	const res = await fetch(url, { method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) });
