@@ -71,45 +71,74 @@
 			<input type="hidden" id="provider-edit-name" value="">
 			<div class="space-y-4">
 				<div>
+					<label class="block text-sm font-black text-black mb-1">预设模板</label>
+					<select id="pf-template" onchange="applyProviderTemplate(this.value)" class="w-full px-4 py-2.5 bg-white border-4 border-black text-black font-bold focus:outline-none shadow-[4px_4px_0px_#feca57]">
+						<option value="new-api">new-api 标准模板</option>
+						<option value="agentrouter">agentrouter 自动签到模板</option>
+						<option value="custom">完全自定义</option>
+					</select>
+					<p class="text-xs font-bold text-black/80 mt-1">模板仅填充建议值，仍可手动修改全部字段。</p>
+				</div>
+				<div>
 					<label class="block text-sm font-black text-black mb-1">名称 (唯一标识)</label>
 					<input type="text" id="pf-name" required class="w-full px-4 py-2.5 bg-white border-4 border-black text-black font-bold placeholder:text-black/30 focus:outline-none shadow-[4px_4px_0px_#feca57] transition-all duration-150" placeholder="例如：myrouter">
 				</div>
 				<div>
 					<label class="block text-sm font-black text-black mb-1">域名</label>
-					<input type="url" id="pf-domain" required class="w-full px-4 py-2.5 bg-white border-4 border-black text-black font-bold placeholder:text-black/30 focus:outline-none shadow-[4px_4px_0px_#feca57] transition-all duration-150" placeholder="https://example.com">
+					<input type="url" id="pf-domain" list="provider-domain-suggestions" required class="w-full px-4 py-2.5 bg-white border-4 border-black text-black font-bold placeholder:text-black/30 focus:outline-none shadow-[4px_4px_0px_#feca57] transition-all duration-150" placeholder="https://example.com">
 				</div>
 				<div class="grid grid-cols-2 gap-3">
 					<div>
 						<label class="block text-sm font-black text-black mb-1">登录路径</label>
-						<input type="text" id="pf-login-path" value="/login" class="w-full px-3 py-2 bg-white border-4 border-black text-black font-bold focus:outline-none shadow-[3px_3px_0px_#48dbfb] transition-all duration-150 text-sm">
+						<input type="text" id="pf-login-path" list="provider-login-path-suggestions" value="/login" class="w-full px-3 py-2 bg-white border-4 border-black text-black font-bold focus:outline-none shadow-[3px_3px_0px_#48dbfb] transition-all duration-150 text-sm">
 					</div>
 					<div>
 						<label class="block text-sm font-black text-black mb-1">签到路径</label>
-						<input type="text" id="pf-signin-path" value="/api/user/sign_in" class="w-full px-3 py-2 bg-white border-4 border-black text-black font-bold focus:outline-none shadow-[3px_3px_0px_#48dbfb] transition-all duration-150 text-sm">
+						<input type="text" id="pf-signin-path" list="provider-signin-path-suggestions" value="/api/user/sign_in" class="w-full px-3 py-2 bg-white border-4 border-black text-black font-bold focus:outline-none shadow-[3px_3px_0px_#48dbfb] transition-all duration-150 text-sm">
 					</div>
 				</div>
 				<div class="grid grid-cols-2 gap-3">
 					<div>
 						<label class="block text-sm font-black text-black mb-1">用户信息路径</label>
-						<input type="text" id="pf-userinfo-path" value="/api/user/self" class="w-full px-3 py-2 bg-white border-4 border-black text-black font-bold focus:outline-none shadow-[3px_3px_0px_#48dbfb] transition-all duration-150 text-sm">
+						<input type="text" id="pf-userinfo-path" list="provider-userinfo-path-suggestions" value="/api/user/self" class="w-full px-3 py-2 bg-white border-4 border-black text-black font-bold focus:outline-none shadow-[3px_3px_0px_#48dbfb] transition-all duration-150 text-sm">
 					</div>
 					<div>
 						<label class="block text-sm font-black text-black mb-1">API User Key</label>
-						<input type="text" id="pf-api-user-key" value="new-api-user" class="w-full px-3 py-2 bg-white border-4 border-black text-black font-bold focus:outline-none shadow-[3px_3px_0px_#48dbfb] transition-all duration-150 text-sm">
+						<input type="text" id="pf-api-user-key" list="provider-api-user-key-suggestions" value="new-api-user" class="w-full px-3 py-2 bg-white border-4 border-black text-black font-bold focus:outline-none shadow-[3px_3px_0px_#48dbfb] transition-all duration-150 text-sm">
 					</div>
 				</div>
 				<div>
 					<label class="block text-sm font-black text-black mb-1">WAF 绕过方式</label>
-					<select id="pf-bypass" class="w-full px-4 py-2.5 bg-white border-4 border-black text-black font-bold focus:outline-none shadow-[4px_4px_0px_#feca57]">
-						<option value="">无 (直接访问)</option>
-						<option value="waf_cookies">WAF Cookies (Playwright)</option>
-					</select>
+					<input type="text" id="pf-bypass" list="provider-bypass-suggestions" class="w-full px-4 py-2.5 bg-white border-4 border-black text-black font-bold placeholder:text-black/30 focus:outline-none shadow-[4px_4px_0px_#feca57] transition-all duration-150" placeholder="例如：waf_cookies；留空表示无">
 				</div>
 				<div>
 					<label class="block text-sm font-black text-black mb-1">WAF Cookie 名称 (逗号分隔)</label>
 					<input type="text" id="pf-waf-cookies" class="w-full px-4 py-2.5 bg-white border-4 border-black text-black font-bold placeholder:text-black/30 focus:outline-none shadow-[4px_4px_0px_#feca57] transition-all duration-150" placeholder="acw_tc, cdn_sec_tc">
 				</div>
 			</div>
+			<datalist id="provider-domain-suggestions">
+				<option value="https://new-api.example.com"></option>
+				<option value="https://anyrouter.top"></option>
+				<option value="https://agentrouter.org"></option>
+			</datalist>
+			<datalist id="provider-login-path-suggestions">
+				<option value="/login"></option>
+			</datalist>
+			<datalist id="provider-signin-path-suggestions">
+				<option value="/api/user/sign_in"></option>
+				<option value="/api/user/checkin"></option>
+			</datalist>
+			<datalist id="provider-userinfo-path-suggestions">
+				<option value="/api/user/self"></option>
+				<option value="/api/user/info"></option>
+			</datalist>
+			<datalist id="provider-api-user-key-suggestions">
+				<option value="new-api-user"></option>
+				<option value="New-Api-User"></option>
+			</datalist>
+			<datalist id="provider-bypass-suggestions">
+				<option value="waf_cookies"></option>
+			</datalist>
 			<div class="flex justify-end space-x-3 mt-6">
 				<button type="button" onclick="closeProviderModal()" class="px-5 py-2.5 border-4 border-black bg-white text-black font-black text-sm shadow-[4px_4px_0px_#000] transition-all duration-150 hover:bg-pink-300 hover:shadow-[6px_6px_0px_#000] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none">取消</button>
 				<button type="submit" class="px-5 py-2.5 border-4 border-black bg-[#feca57] text-black font-black text-sm shadow-[4px_4px_0px_#000] transition-all duration-150 hover:bg-[#48dbfb] hover:shadow-[6px_6px_0px_#000] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none">保存</button>
@@ -121,17 +150,64 @@
 
 {% block scripts %}
 <script>
+const PROVIDER_TEMPLATES = {
+	'new-api': {
+		domain: 'https://new-api.example.com',
+		login_path: '/login',
+		sign_in_path: '/api/user/sign_in',
+		user_info_path: '/api/user/self',
+		api_user_key: 'new-api-user',
+		bypass_method: 'waf_cookies',
+		waf_cookie_names: ['acw_tc'],
+	},
+	agentrouter: {
+		domain: 'https://agentrouter.org',
+		login_path: '/login',
+		sign_in_path: '',
+		user_info_path: '/api/user/self',
+		api_user_key: 'new-api-user',
+		bypass_method: 'waf_cookies',
+		waf_cookie_names: ['acw_tc'],
+	},
+};
+
+function applyProviderTemplate(templateName) {
+	const template = PROVIDER_TEMPLATES[templateName];
+	if (!template) return;
+	document.getElementById('pf-domain').value = template.domain;
+	document.getElementById('pf-login-path').value = template.login_path;
+	document.getElementById('pf-signin-path').value = template.sign_in_path;
+	document.getElementById('pf-userinfo-path').value = template.user_info_path;
+	document.getElementById('pf-api-user-key').value = template.api_user_key;
+	document.getElementById('pf-bypass').value = template.bypass_method || '';
+	document.getElementById('pf-waf-cookies').value = (template.waf_cookie_names || []).join(', ');
+}
+
+function detectTemplate(p) {
+	for (const [name, template] of Object.entries(PROVIDER_TEMPLATES)) {
+		const wafNames = (() => { try { return JSON.parse(p.waf_cookie_names || '[]'); } catch(e) { return []; } })();
+		const wafMatched = JSON.stringify(wafNames) === JSON.stringify(template.waf_cookie_names || []);
+		if (
+			(p.domain || '') === (template.domain || '')
+			&& (p.login_path || '') === (template.login_path || '')
+			&& (p.sign_in_path || '') === (template.sign_in_path || '')
+			&& (p.user_info_path || '') === (template.user_info_path || '')
+			&& (p.api_user_key || '') === (template.api_user_key || '')
+			&& (p.bypass_method || '') === (template.bypass_method || '')
+			&& wafMatched
+		) {
+			return name;
+		}
+	}
+	return 'custom';
+}
+
 function showAddProviderModal() {
 	document.getElementById('provider-modal-title').textContent = '添加 Provider';
 	document.getElementById('provider-edit-name').value = '';
 	document.getElementById('pf-name').value = ''; document.getElementById('pf-name').disabled = false;
-	document.getElementById('pf-domain').value = '';
-	document.getElementById('pf-login-path').value = '/login';
-	document.getElementById('pf-signin-path').value = '/api/user/sign_in';
-	document.getElementById('pf-userinfo-path').value = '/api/user/self';
-	document.getElementById('pf-api-user-key').value = 'new-api-user';
-	document.getElementById('pf-bypass').value = '';
-	document.getElementById('pf-waf-cookies').value = '';
+	document.getElementById('pf-template').value = 'new-api';
+	applyProviderTemplate('new-api');
 	document.getElementById('provider-modal').classList.remove('hidden');
 	document.getElementById('provider-modal').classList.add('flex');
 }
@@ -140,13 +216,14 @@ function showEditProviderModal(p) {
 	document.getElementById('provider-edit-name').value = p.name;
 	document.getElementById('pf-name').value = p.name; document.getElementById('pf-name').disabled = true;
 	document.getElementById('pf-domain').value = p.domain;
-	document.getElementById('pf-login-path').value = p.login_path || '/login';
-	document.getElementById('pf-signin-path').value = p.sign_in_path || '/api/user/sign_in';
-	document.getElementById('pf-userinfo-path').value = p.user_info_path || '/api/user/self';
-	document.getElementById('pf-api-user-key').value = p.api_user_key || 'new-api-user';
+	document.getElementById('pf-login-path').value = p.login_path == null ? '/login' : p.login_path;
+	document.getElementById('pf-signin-path').value = p.sign_in_path == null ? '/api/user/sign_in' : p.sign_in_path;
+	document.getElementById('pf-userinfo-path').value = p.user_info_path == null ? '/api/user/self' : p.user_info_path;
+	document.getElementById('pf-api-user-key').value = p.api_user_key == null ? 'new-api-user' : p.api_user_key;
 	document.getElementById('pf-bypass').value = p.bypass_method || '';
 	let wafNames = ''; try { wafNames = JSON.parse(p.waf_cookie_names || '[]').join(', '); } catch(e) {}
 	document.getElementById('pf-waf-cookies').value = wafNames;
+	document.getElementById('pf-template').value = detectTemplate(p);
 	document.getElementById('provider-modal').classList.remove('hidden');
 	document.getElementById('provider-modal').classList.add('flex');
 }
@@ -159,7 +236,8 @@ async function submitProvider(e) {
 	const editName = document.getElementById('provider-edit-name').value;
 	const wafStr = document.getElementById('pf-waf-cookies').value;
 	const wafCookies = wafStr ? wafStr.split(',').map(s => s.trim()).filter(Boolean) : [];
-	const data = { name: document.getElementById('pf-name').value, domain: document.getElementById('pf-domain').value, login_path: document.getElementById('pf-login-path').value, sign_in_path: document.getElementById('pf-signin-path').value, user_info_path: document.getElementById('pf-userinfo-path').value, api_user_key: document.getElementById('pf-api-user-key').value, bypass_method: document.getElementById('pf-bypass').value || null, waf_cookie_names: wafCookies };
+	const bypassValue = document.getElementById('pf-bypass').value.trim();
+	const data = { name: document.getElementById('pf-name').value, domain: document.getElementById('pf-domain').value, login_path: document.getElementById('pf-login-path').value, sign_in_path: document.getElementById('pf-signin-path').value, user_info_path: document.getElementById('pf-userinfo-path').value, api_user_key: document.getElementById('pf-api-user-key').value, bypass_method: bypassValue || null, waf_cookie_names: wafCookies };
 	const url = editName ? `/api/providers/${editName}` : '/api/providers';
 	const method = editName ? 'PUT' : 'POST';
 	const res = await fetch(url, { method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) });
