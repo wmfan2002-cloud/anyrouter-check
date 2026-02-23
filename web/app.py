@@ -1,17 +1,19 @@
 import os
+from typing import Annotated
 
-from fastapi import FastAPI, Request, Form
+from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from web.auth import auth_middleware, verify_password, set_auth_cookie, is_authenticated
+from web.auth import auth_middleware, is_authenticated, set_auth_cookie, verify_password
 from web.database import init_db
+from web.failure_reason import categorize_checkin_result
 from web.routes.accounts import router as accounts_router
-from web.routes.providers import router as providers_router
 from web.routes.checkin import router as checkin_router
 from web.routes.logs import router as logs_router
+from web.routes.providers import router as providers_router
 
 app = FastAPI(title='AnyRouter Check-in', docs_url=None, redoc_url=None)
 
@@ -42,7 +44,7 @@ async def login_page(request: Request):
 
 
 @app.post('/login', response_class=HTMLResponse)
-async def login_submit(request: Request, password: str = Form(...)):
+async def login_submit(request: Request, password: Annotated[str, Form(...)]):
 	if verify_password(password):
 		response = RedirectResponse(url='/', status_code=302)
 		return set_auth_cookie(response)
@@ -61,6 +63,9 @@ async def dashboard(request: Request):
 	from web.database import get_all_accounts, get_checkin_logs, get_setting
 	accounts = await get_all_accounts()
 	recent_logs = await get_checkin_logs(limit=10)
+	for log in recent_logs:
+		log['error_category'] = categorize_checkin_result(log.get('status'), log.get('message'))
+
 	cron_expr = await get_setting('cron_expression', '0 */6 * * *')
 
 	from web.scheduler import get_next_run_time
