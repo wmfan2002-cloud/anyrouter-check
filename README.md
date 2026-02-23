@@ -132,10 +132,11 @@ docker compose up -d --build
 
 ### Provider 管理
 
-Provider 是签到目标平台的配置。系统内置了两个 Provider：
+Provider 是签到目标平台的配置。系统内置了三个 Provider：
 
 | 名称 | 域名 | WAF 绕过 |
 |------|------|----------|
+| new-api | https://new-api.example.com | waf_cookies |
 | anyrouter | https://anyrouter.top | waf_cookies |
 | agentrouter | https://agentrouter.org | waf_cookies |
 

@@ -1,7 +1,8 @@
-import aiosqlite
 import json
 import os
 from datetime import datetime
+
+import aiosqlite
 
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'checkin.db')
 
@@ -77,6 +78,9 @@ async def init_db():
 
 async def _init_builtin_providers(db):
 	builtins = [
+		('new-api', 'https://new-api.example.com', '/login', '/api/user/sign_in',
+		 '/api/user/self', 'new-api-user', 'waf_cookies',
+		 json.dumps(['acw_tc'])),
 		('anyrouter', 'https://anyrouter.top', '/login', '/api/user/sign_in',
 		 '/api/user/self', 'new-api-user', 'waf_cookies',
 		 json.dumps(['acw_tc', 'cdn_sec_tc', 'acw_sc__v2'])),

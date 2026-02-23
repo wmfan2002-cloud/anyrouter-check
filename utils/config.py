@@ -76,6 +76,16 @@ class AppConfig:
 	def load_from_env(cls) -> 'AppConfig':
 		"""从环境变量加载配置"""
 		providers = {
+			'new-api': ProviderConfig(
+				name='new-api',
+				domain='https://new-api.example.com',
+				login_path='/login',
+				sign_in_path='/api/user/sign_in',
+				user_info_path='/api/user/self',
+				api_user_key='new-api-user',
+				bypass_method='waf_cookies',
+				waf_cookie_names=['acw_tc'],
+			),
 			'anyrouter': ProviderConfig(
 				name='anyrouter',
 				domain='https://anyrouter.top',
