@@ -50,8 +50,8 @@
 ### 1. 克隆仓库
 
 ```bash
-git clone https://github.com/millylee/anyrouter-check-in.git
-cd anyrouter-check-in
+git clone https://github.com/wmfan2002-cloud/anyrouter-check.git
+cd anyrouter-check
 ```
 
 ### 2. 修改配置
