@@ -67,6 +67,30 @@ def test_execute_check_in_failure_branch():
 	assert 'HTTP 500' in result['message']
 
 
+def test_execute_check_in_auth_failure_branch():
+	resp = _MockResponse(200, {'ret': 0, 'msg': 'invalid api user'})
+	client = _MockClient(resp)
+	provider = ProviderConfig(name='p', domain='https://example.com')
+
+	result = execute_check_in(client, 'acc', provider, {})
+
+	assert result['success'] is False
+	assert result['status'] == 'failed'
+	assert 'invalid api user' in result['message'].lower()
+
+
+def test_execute_check_in_network_failure_branch():
+	resp = _MockResponse(200, {'ret': 0, 'msg': 'connection timed out'})
+	client = _MockClient(resp)
+	provider = ProviderConfig(name='p', domain='https://example.com')
+
+	result = execute_check_in(client, 'acc', provider, {})
+
+	assert result['success'] is False
+	assert result['status'] == 'failed'
+	assert 'timed out' in result['message'].lower()
+
+
 def test_scheduler_cookie_mode_records_already_checked_in(monkeypatch):
 	provider = ProviderConfig(
 		name='new-api',

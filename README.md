@@ -412,6 +412,15 @@ uv run checkin.py
 
 # 运行测试
 uv run pytest tests/
+
+# 运行 new-api 回归矩阵（签到流/Provider 表单/日志导航筛选）
+uv run pytest -q \
+  tests/test_checkin_branches.py \
+  tests/test_provider_form_matrix.py \
+  tests/test_dashboard_recent_logs_entry.py \
+  tests/test_logs_pagination_stability.py \
+  tests/test_provider_validation.py \
+  tests/test_failure_reason_classifier.py
 ```
 
 ---
