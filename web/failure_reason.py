@@ -63,6 +63,49 @@ UPSTREAM_ERROR_KEYWORDS = (
 	'internal server error',
 )
 
+CATEGORY_DISPLAY_MAP = {
+	'auth_failed': {
+		'label': '认证失败',
+		'hint': '请检查 Cookie、API User 或登录凭据后重试',
+		'actionable': True,
+	},
+	'waf_blocked': {
+		'label': 'WAF 拦截',
+		'hint': '请确认 WAF Cookie 是否完整，必要时改用浏览器登录',
+		'actionable': True,
+	},
+	'network_error': {
+		'label': '网络错误',
+		'hint': '请检查域名可达性与网络连通性后重试',
+		'actionable': True,
+	},
+	'config_error': {
+		'label': '配置错误',
+		'hint': '请检查 Provider 域名与路径配置是否正确',
+		'actionable': True,
+	},
+	'upstream_error': {
+		'label': '上游异常',
+		'hint': '上游服务异常，建议稍后重试',
+		'actionable': True,
+	},
+	'already_checked_in': {
+		'label': '今日已签到',
+		'hint': '今日签到已完成，无需执行修复动作',
+		'actionable': False,
+	},
+	'unknown_error': {
+		'label': '未知错误',
+		'hint': '请查看原始错误信息并结合日志排查',
+		'actionable': True,
+	},
+	'success': {
+		'label': '成功',
+		'hint': '执行成功',
+		'actionable': False,
+	},
+}
+
 
 def _contains_any(text: str, keywords: tuple[str, ...]) -> bool:
 	return any(keyword in text for keyword in keywords)
@@ -88,3 +131,15 @@ def categorize_checkin_result(status: str | None, message: str | None) -> str:
 	if _contains_any(text, UPSTREAM_ERROR_KEYWORDS):
 		return 'upstream_error'
 	return 'unknown_error'
+
+
+def summarize_reason(status: str | None, message: str | None) -> dict:
+	"""Return normalized category with localized display metadata."""
+	category = categorize_checkin_result(status, message)
+	meta = CATEGORY_DISPLAY_MAP.get(category, CATEGORY_DISPLAY_MAP['unknown_error'])
+	return {
+		'error_category': category,
+		'error_category_label': meta['label'],
+		'error_category_hint': meta['hint'],
+		'error_category_actionable': meta['actionable'],
+	}

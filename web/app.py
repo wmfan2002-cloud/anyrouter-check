@@ -9,7 +9,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from web.auth import auth_middleware, is_authenticated, set_auth_cookie, verify_password
 from web.database import init_db
-from web.failure_reason import categorize_checkin_result
+from web.failure_reason import summarize_reason
 from web.routes.accounts import router as accounts_router
 from web.routes.checkin import router as checkin_router
 from web.routes.logs import router as logs_router
@@ -64,7 +64,7 @@ async def dashboard(request: Request):
 	accounts = await get_all_accounts()
 	recent_logs = await get_checkin_logs(limit=10)
 	for log in recent_logs:
-		log['error_category'] = categorize_checkin_result(log.get('status'), log.get('message'))
+		log.update(summarize_reason(log.get('status'), log.get('message')))
 
 	cron_expr = await get_setting('cron_expression', '0 */6 * * *')
 

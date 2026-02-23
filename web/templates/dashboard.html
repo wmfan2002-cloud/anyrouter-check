@@ -128,6 +128,7 @@
 					<th class="text-left px-4 py-3 font-black text-black text-xs">账号</th>
 					<th class="text-left px-4 py-3 font-black text-black text-xs">Provider</th>
 					<th class="text-left px-4 py-3 font-black text-black text-xs">状态</th>
+					<th class="text-left px-4 py-3 font-black text-black text-xs">原因分类</th>
 					<th class="text-left px-4 py-3 font-black text-black text-xs">余额</th>
 					<th class="text-left px-4 py-3 font-black text-black text-xs">触发</th>
 					<th class="text-left px-4 py-3 font-black text-black text-xs">时间</th>
@@ -140,9 +141,29 @@
 					<td class="px-4 py-3 font-bold text-black">{{ log.provider }}</td>
 					<td class="px-4 py-3">
 						<span class="inline-flex px-2 py-1 border-4 border-black text-xs font-black
-							{% if log.status == 'success' %}bg-[#1dd1a1] text-black{% else %}bg-[#ff6b6b] text-white{% endif %}">
-							{% if log.status == 'success' %}成功{% else %}失败{% endif %}
+							{% if log.status == 'success' %}bg-[#1dd1a1] text-black
+							{% elif log.status == 'already_checked_in' %}bg-[#feca57] text-black
+							{% else %}bg-[#ff6b6b] text-white{% endif %}">
+							{% if log.status == 'success' %}成功
+							{% elif log.status == 'already_checked_in' %}今日已签到
+							{% else %}失败{% endif %}
 						</span>
+					</td>
+					<td class="px-4 py-3 text-xs">
+						{% if log.status != 'success' %}
+						<div class="mb-1">
+							<span class="inline-flex px-2 py-0.5 border-4 border-black text-[11px] font-black
+								{% if log.error_category == 'already_checked_in' %}bg-[#feca57] text-black{% else %}bg-[#48dbfb] text-black{% endif %}">
+								{{ log.error_category_label }}
+							</span>
+						</div>
+						<p class="font-bold text-black/80 leading-snug">{{ log.error_category_hint }}</p>
+						{% if log.message %}
+						<p class="mt-1 font-mono text-[11px] text-black/70 truncate" title="{{ log.message }}">原始: {{ log.message }}</p>
+						{% endif %}
+						{% else %}
+						<span class="font-bold text-black">-</span>
+						{% endif %}
 					</td>
 					<td class="px-4 py-3 font-black text-black">{{ '$%.2f'|format(log.balance) if log.balance is not none else '-' }}</td>
 					<td class="px-4 py-3">

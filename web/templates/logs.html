@@ -12,6 +12,7 @@
 				class="px-4 py-2.5 bg-white border-4 border-black text-black font-black text-sm focus:outline-none shadow-[4px_4px_0px_#ff9ff3]">
 				<option value="">全部状态</option>
 				<option value="success" {% if filter_status == 'success' %}selected{% endif %}>成功</option>
+				<option value="already_checked_in" {% if filter_status == 'already_checked_in' %}selected{% endif %}>今日已签到</option>
 				<option value="failed" {% if filter_status == 'failed' %}selected{% endif %}>失败</option>
 			</select>
 			<select id="filter-account" onchange="applyFilter()"
@@ -47,8 +48,12 @@
 					<td class="px-4 py-3 font-bold text-black">{{ log.provider }}</td>
 					<td class="px-4 py-3">
 						<span class="inline-flex px-2 py-0.5 border-4 border-black text-xs font-black
-							{% if log.status == 'success' %}bg-[#1dd1a1] text-black{% else %}bg-[#ff6b6b] text-white{% endif %}">
-							{% if log.status == 'success' %}成功{% else %}失败{% endif %}
+							{% if log.status == 'success' %}bg-[#1dd1a1] text-black
+							{% elif log.status == 'already_checked_in' %}bg-[#feca57] text-black
+							{% else %}bg-[#ff6b6b] text-white{% endif %}">
+							{% if log.status == 'success' %}成功
+							{% elif log.status == 'already_checked_in' %}今日已签到
+							{% else %}失败{% endif %}
 						</span>
 					</td>
 					<td class="px-4 py-3 font-black text-black">{{ '$%.2f'|format(log.balance) if log.balance is not none else '-' }}</td>
@@ -58,7 +63,25 @@
 							{% if log.triggered_by == 'manual' %}手动{% else %}定时{% endif %}
 						</span>
 					</td>
-					<td class="px-4 py-3 font-bold text-black text-xs max-w-xs truncate" title="{{ log.message or '' }}">{{ log.message or '-' }}</td>
+					<td class="px-4 py-3 text-xs max-w-sm">
+						{% if log.status != 'success' %}
+						<div class="mb-1">
+							<span class="inline-flex px-2 py-0.5 border-4 border-black text-[11px] font-black
+								{% if log.error_category == 'already_checked_in' %}bg-[#feca57] text-black{% else %}bg-[#48dbfb] text-black{% endif %}">
+								{{ log.error_category_label }}
+							</span>
+						</div>
+						<p class="font-bold text-black/80 leading-snug mb-1">{{ log.error_category_hint }}</p>
+						{% endif %}
+						{% if log.message %}
+						<details class="group">
+							<summary class="cursor-pointer font-black text-black underline decoration-2 underline-offset-2">查看原始信息</summary>
+							<p class="mt-1 px-2 py-1 border-4 border-black bg-white font-mono text-[11px] break-all">{{ log.message }}</p>
+						</details>
+						{% else %}
+						<span class="font-bold text-black">-</span>
+						{% endif %}
+					</td>
 				</tr>
 				{% endfor %}
 			</tbody>

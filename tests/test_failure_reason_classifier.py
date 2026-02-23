@@ -7,7 +7,7 @@ sys.path.insert(0, str(project_root))
 
 import pytest
 
-from web.failure_reason import categorize_checkin_result
+from web.failure_reason import categorize_checkin_result, summarize_reason
 
 
 @pytest.mark.parametrize(
@@ -28,3 +28,10 @@ def test_categorize_checkin_result(status, message, expected):
 def test_categorize_checkin_result_uses_priority_for_conflicts():
 	message = 'cookie expired after waf challenge timeout'
 	assert categorize_checkin_result('failed', message) == 'auth_failed'
+
+
+def test_summarize_reason_marks_already_checked_in_as_non_actionable():
+	summary = summarize_reason('already_checked_in', 'already checked in today')
+	assert summary['error_category'] == 'already_checked_in'
+	assert summary['error_category_label'] == '今日已签到'
+	assert summary['error_category_actionable'] is False
