@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% block title %}Provider 管理 - AnyRouter Check-in{% endblock %}
 {% block content %}
-<div class="max-w-5xl">
-	<div class="flex items-center justify-between mb-8">
+<div class="w-full">
+	<div class="flex items-center justify-between mb-8 gap-4 flex-wrap">
 		<div class="relative">
 			<h2 class="text-3xl font-black tracking-tight text-black">Provider 管理</h2>
 			<div class="absolute -top-2 -left-4 w-4 h-4 bg-[#1dd1a1] border-2 border-black rotate-45"></div>
@@ -14,8 +14,8 @@
 		</button>
 	</div>
 
-	<div class="border-4 border-black bg-white shadow-[8px_8px_0px_#000] overflow-hidden">
-		<table class="w-full text-sm">
+	<div class="border-4 border-black bg-white shadow-[8px_8px_0px_#000] overflow-x-auto">
+		<table class="min-w-full text-sm table-auto">
 			<thead class="bg-[#1dd1a1] border-b-4 border-black">
 				<tr>
 					<th class="text-left px-4 py-3 font-black text-black text-xs">名称</th>
@@ -29,7 +29,9 @@
 				{% for p in providers %}
 				<tr class="border-b-4 border-black {% if loop.index is odd %}bg-white{% else %}bg-[#f5e6cc]{% endif %}">
 					<td class="px-4 py-3 font-black text-black">{{ p.name }}</td>
-					<td class="px-4 py-3 font-bold text-black font-mono text-xs">{{ p.domain }}</td>
+					<td class="px-4 py-3 font-bold text-black font-mono text-xs">
+						{% if p.domain %}{{ p.domain }}{% else %}<span class="font-black text-black/50 not-italic">模板 (账号指定)</span>{% endif %}
+					</td>
 					<td class="px-4 py-3">
 						{% if p.bypass_method %}
 						<span class="inline-flex px-2 py-0.5 border-4 border-black text-xs font-black bg-[#feca57] text-black">{{ p.bypass_method }}</span>
@@ -46,7 +48,7 @@
 					</td>
 					<td class="px-4 py-3 text-right space-x-1">
 						{% if not p.is_builtin %}
-						<button onclick="showEditProviderModal({{ p|tojson }})"
+						<button onclick='showEditProviderModal({{ p|tojson }})'
 							class="px-2 py-1 border-4 border-black text-xs font-black bg-[#48dbfb] shadow-[2px_2px_0px_#000] transition-all duration-150 hover:bg-[#feca57] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none">编辑</button>
 						<button onclick="deleteProvider('{{ p.name }}')"
 							class="px-2 py-1 border-4 border-black text-xs font-black bg-[#ff6b6b] text-white shadow-[2px_2px_0px_#000] transition-all duration-150 hover:bg-[#ff9ff3] hover:text-black active:translate-x-[2px] active:translate-y-[2px] active:shadow-none">删除</button>
@@ -63,7 +65,7 @@
 
 <!-- Provider Modal -->
 <div id="provider-modal" class="fixed inset-0 bg-black/60 z-50 hidden items-center justify-center" onclick="if(event.target===this)closeProviderModal()">
-	<div class="bg-[#1dd1a1] border-4 border-black shadow-[8px_8px_0px_#000] w-full max-w-lg mx-4 p-6 relative">
+	<div class="bg-[#1dd1a1] border-4 border-black shadow-[8px_8px_0px_#000] w-full max-w-lg mx-4 p-6 relative max-h-[90vh] overflow-y-auto">
 		<div class="absolute -top-4 -right-4 w-10 h-10 bg-[#feca57] rounded-full border-4 border-black"></div>
 		<div class="absolute -bottom-3 -left-3 w-0 h-0 border-l-[14px] border-l-transparent border-r-[14px] border-r-transparent border-t-[18px] border-t-[#ff6b6b]"></div>
 		<h3 id="provider-modal-title" class="text-xl font-black text-black mb-5">添加 Provider</h3>
@@ -77,43 +79,51 @@
 						<option value="agentrouter">agentrouter 自动签到模板</option>
 						<option value="custom">完全自定义</option>
 					</select>
-					<p class="text-xs font-bold text-black/80 mt-1">模板仅填充建议值，仍可手动修改全部字段。</p>
+					<p class="text-xs font-bold text-black/60 mt-1">模板仅填充建议值，仍可手动修改全部字段。</p>
 				</div>
 				<div>
 					<label class="block text-sm font-black text-black mb-1">名称 (唯一标识)</label>
 					<input type="text" id="pf-name" required class="w-full px-4 py-2.5 bg-white border-4 border-black text-black font-bold placeholder:text-black/30 focus:outline-none shadow-[4px_4px_0px_#feca57] transition-all duration-150" placeholder="例如：myrouter">
+					<p class="text-xs font-bold text-black/60 mt-1">唯一标识符，用于关联账号。例如: my-newapi、site-a</p>
 				</div>
 				<div>
 					<label class="block text-sm font-black text-black mb-1">域名</label>
 					<input type="url" id="pf-domain" list="provider-domain-suggestions" required class="w-full px-4 py-2.5 bg-white border-4 border-black text-black font-bold placeholder:text-black/30 focus:outline-none shadow-[4px_4px_0px_#feca57] transition-all duration-150" placeholder="https://example.com">
+					<p class="text-xs font-bold text-black/60 mt-1">站点完整地址。new-api 后端填写你的部署地址，如 https://api.example.com</p>
 				</div>
 				<div class="grid grid-cols-2 gap-3">
 					<div>
 						<label class="block text-sm font-black text-black mb-1">登录路径</label>
 						<input type="text" id="pf-login-path" list="provider-login-path-suggestions" value="/login" class="w-full px-3 py-2 bg-white border-4 border-black text-black font-bold focus:outline-none shadow-[3px_3px_0px_#48dbfb] transition-all duration-150 text-sm">
+						<p class="text-xs font-bold text-black/60 mt-1">浏览器登录页路径。new-api 通常为 /login</p>
 					</div>
 					<div>
 						<label class="block text-sm font-black text-black mb-1">签到路径</label>
-						<input type="text" id="pf-signin-path" list="provider-signin-path-suggestions" value="/api/user/sign_in" class="w-full px-3 py-2 bg-white border-4 border-black text-black font-bold focus:outline-none shadow-[3px_3px_0px_#48dbfb] transition-all duration-150 text-sm">
+						<input type="text" id="pf-signin-path" list="provider-signin-path-suggestions" value="/api/user/checkin" class="w-full px-3 py-2 bg-white border-4 border-black text-black font-bold focus:outline-none shadow-[3px_3px_0px_#48dbfb] transition-all duration-150 text-sm">
+						<p class="text-xs font-bold text-black/60 mt-1">签到 API 端点。new-api 使用 /api/user/checkin；留空表示自动签到</p>
 					</div>
 				</div>
 				<div class="grid grid-cols-2 gap-3">
 					<div>
 						<label class="block text-sm font-black text-black mb-1">用户信息路径</label>
 						<input type="text" id="pf-userinfo-path" list="provider-userinfo-path-suggestions" value="/api/user/self" class="w-full px-3 py-2 bg-white border-4 border-black text-black font-bold focus:outline-none shadow-[3px_3px_0px_#48dbfb] transition-all duration-150 text-sm">
+						<p class="text-xs font-bold text-black/60 mt-1">获取用户余额的 API。new-api 通常为 /api/user/self</p>
 					</div>
 					<div>
 						<label class="block text-sm font-black text-black mb-1">API User Key</label>
 						<input type="text" id="pf-api-user-key" list="provider-api-user-key-suggestions" value="new-api-user" class="w-full px-3 py-2 bg-white border-4 border-black text-black font-bold focus:outline-none shadow-[3px_3px_0px_#48dbfb] transition-all duration-150 text-sm">
+						<p class="text-xs font-bold text-black/60 mt-1">请求头中传递用户 ID 的 Header 名。new-api 为 new-api-user</p>
 					</div>
 				</div>
 				<div>
 					<label class="block text-sm font-black text-black mb-1">WAF 绕过方式</label>
 					<input type="text" id="pf-bypass" list="provider-bypass-suggestions" class="w-full px-4 py-2.5 bg-white border-4 border-black text-black font-bold placeholder:text-black/30 focus:outline-none shadow-[4px_4px_0px_#feca57] transition-all duration-150" placeholder="例如：waf_cookies；留空表示无">
+					<p class="text-xs font-bold text-black/60 mt-1">如站点有 WAF 防护（如阿里云 WAF），填 waf_cookies；无 WAF 则留空</p>
 				</div>
 				<div>
 					<label class="block text-sm font-black text-black mb-1">WAF Cookie 名称 (逗号分隔)</label>
 					<input type="text" id="pf-waf-cookies" class="w-full px-4 py-2.5 bg-white border-4 border-black text-black font-bold placeholder:text-black/30 focus:outline-none shadow-[4px_4px_0px_#feca57] transition-all duration-150" placeholder="acw_tc, cdn_sec_tc">
+					<p class="text-xs font-bold text-black/60 mt-1">WAF 设置的 Cookie 名，逗号分隔。常见: acw_tc；阿里云 WAF 可能还有 cdn_sec_tc, acw_sc__v2</p>
 				</div>
 			</div>
 			<datalist id="provider-domain-suggestions">
@@ -125,8 +135,8 @@
 				<option value="/login"></option>
 			</datalist>
 			<datalist id="provider-signin-path-suggestions">
-				<option value="/api/user/sign_in"></option>
 				<option value="/api/user/checkin"></option>
+				<option value="/api/user/sign_in"></option>
 			</datalist>
 			<datalist id="provider-userinfo-path-suggestions">
 				<option value="/api/user/self"></option>
@@ -154,7 +164,7 @@ const PROVIDER_TEMPLATES = {
 	'new-api': {
 		domain: 'https://new-api.example.com',
 		login_path: '/login',
-		sign_in_path: '/api/user/sign_in',
+		sign_in_path: '/api/user/checkin',
 		user_info_path: '/api/user/self',
 		api_user_key: 'new-api-user',
 		bypass_method: 'waf_cookies',
@@ -217,7 +227,7 @@ function showEditProviderModal(p) {
 	document.getElementById('pf-name').value = p.name; document.getElementById('pf-name').disabled = true;
 	document.getElementById('pf-domain').value = p.domain;
 	document.getElementById('pf-login-path').value = p.login_path == null ? '/login' : p.login_path;
-	document.getElementById('pf-signin-path').value = p.sign_in_path == null ? '/api/user/sign_in' : p.sign_in_path;
+	document.getElementById('pf-signin-path').value = p.sign_in_path == null ? '' : p.sign_in_path;
 	document.getElementById('pf-userinfo-path').value = p.user_info_path == null ? '/api/user/self' : p.user_info_path;
 	document.getElementById('pf-api-user-key').value = p.api_user_key == null ? 'new-api-user' : p.api_user_key;
 	document.getElementById('pf-bypass').value = p.bypass_method || '';

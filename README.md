@@ -1,42 +1,19 @@
-# AnyRouter Check-in 多账号自动签到
+# AnyRouter Check-in 自动签到
 
-多平台多账号自动签到工具，支持 **VPS 自部署（Docker + Web 管理面板）** 和 **GitHub Actions** 两种运行方式。理论上支持所有 NewAPI / OneAPI 平台，内置 AnyRouter 与 AgentRouter 配置，其它平台可自行添加。
-
-用于 Claude Code 中转站 [AnyRouter](https://anyrouter.top/register?aff=qrQ2) 网站多账号每日签到，一次 $25。
+多平台多账号自动签到工具，支持 Docker 自部署（Web 管理面板）和 GitHub Actions 两种运行方式。兼容所有 NewAPI / OneAPI 平台，内置 AnyRouter 与 AgentRouter 配置。
 
 ## 功能特性
 
-- 多平台支持（兼容 NewAPI / OneAPI）
-- 多账号管理，支持启用 / 禁用
-- 两种认证方式：**Cookie 模式** 和 **浏览器自动登录**（无需手动提取 Cookie）
+- 兼容 NewAPI / OneAPI 全系列平台
+- 多账号管理，支持启用/禁用
+- 两种认证方式：Cookie 模式 和 浏览器自动登录（无需手动提取 Cookie）
+- NewAPI 模板 Provider：多个 NewAPI 站点只需创建账号时填域名，无需重复创建 Provider
 - Web 管理面板（仪表盘、账号管理、Provider 管理、执行日志）
-- 自定义签到间隔（1h / 2h / 4h / 6h / 8h / 12h / 24h / 自定义 Cron）
-- 手动触发签到（全部 / 单个账号）
-- 多种消息推送通知（Telegram / 钉钉 / 飞书 / 企业微信 / 邮箱等）
-- 自动绕过 WAF 限制（Playwright 无头浏览器）
-- Docker Compose 一键部署
-- 数据持久化（SQLite）
-
----
-
-## 目录
-
-- [快速开始（Docker 部署）](#快速开始docker-部署)
-- [Web 管理面板使用指南](#web-管理面板使用指南)
-  - [登录](#登录)
-  - [仪表盘](#仪表盘)
-  - [账号管理](#账号管理)
-  - [Provider 管理](#provider-管理)
-  - [执行日志](#执行日志)
-- [账号认证方式](#账号认证方式)
-  - [Cookie 模式](#cookie-模式)
-  - [浏览器自动登录](#浏览器自动登录)
-- [签到间隔设置](#签到间隔设置)
-- [通知配置](#通知配置)
-- [GitHub Actions 方式](#github-actions-方式)
-- [本地开发](#本地开发)
-- [故障排除](#故障排除)
-- [免责声明](#免责声明)
+- 可配置签到间隔（1h ~ 24h / 自定义 Cron）
+- 手动触发签到（全部/单个账号）
+- WAF 自动绕过（Playwright 无头浏览器），误开 WAF 时自动回退重试
+- 多种消息推送（Telegram / 钉钉 / 飞书 / 企业微信 / 邮箱 / PushPlus / Server酱 / Gotify / Bark）
+- Docker Compose 一键部署，SQLite 数据持久化
 
 ---
 
@@ -56,7 +33,7 @@ cd anyrouter-check
 
 ### 2. 修改配置
 
-编辑 `docker-compose.yml`，修改管理密码和时区：
+编辑 `docker-compose.yml`，修改管理密码：
 
 ```yaml
 services:
@@ -68,8 +45,8 @@ services:
     volumes:
       - ./data:/app/data
     environment:
-      - TZ=Asia/Shanghai          # 时区，根据你所在地区修改
-      - ADMIN_PASSWORD=your_password  # 管理面板登录密码，请务必修改
+      - TZ=Asia/Shanghai              # 时区
+      - ADMIN_PASSWORD=your_password   # 管理面板密码，请务必修改
     restart: unless-stopped
 ```
 
@@ -79,17 +56,11 @@ services:
 docker compose up -d --build
 ```
 
-首次构建需要下载 Chromium 浏览器，耐心等待即可。
+首次构建需要下载 Chromium 浏览器，耐心等待。
 
 ### 4. 访问管理面板
 
-打开浏览器访问：
-
-```
-http://你的服务器IP:8080
-```
-
-使用你在 `docker-compose.yml` 中设置的 `ADMIN_PASSWORD` 登录。
+浏览器打开 `http://你的服务器IP:8080`，使用设置的密码登录。
 
 ### 5. 更新版本
 
@@ -102,170 +73,119 @@ docker compose up -d --build
 
 ---
 
-## Web 管理面板使用指南
-
-### 登录
-
-访问管理面板后会自动跳转到登录页面，输入 `ADMIN_PASSWORD` 中配置的密码即可登录。登录状态保持 7 天。
+## 使用教程
 
 ### 仪表盘
 
-仪表盘是主页面，包含以下信息：
+登录后进入仪表盘，包含：
 
-- **统计卡片**：账号总数、已启用数、签到成功数、签到失败数
-- **签到间隔设置**：右上角的下拉菜单可以选择签到频率
-- **下次签到时间**：显示下一次自动签到的时间
-- **立即全部签到**：手动触发所有已启用账号的签到
-- **账号状态卡片**：每个账号的详细状态（余额、已用额度、上次签到时间等）
+- **统计卡片**：账号总数、已启用数、签到成功/失败数
+- **签到间隔**：右上角下拉菜单选择签到频率（默认每 6 小时）
+- **立即全部签到**：手动触发所有已启用账号签到
+- **账号状态卡片**：每个账号的余额、已用额度、上次签到时间，可单独手动签到
 - **最近执行记录**：最近 10 条签到日志
 
-每个账号卡片上都有 **手动签到** 按钮，可以单独触发某个账号的签到。
+### 添加账号
 
-### 账号管理
+进入「账号管理」→ 点击「添加账号」，填写以下信息：
 
-在「账号管理」页面可以进行：
+1. **名称**：自定义，便于识别
+2. **Provider**：选择签到目标平台（见下方说明）
+3. **域名**：选择 `newapi` 或 `newapi-waf` 模板时需要填写你的站点域名
+4. **认证方式**：Cookie 模式 或 浏览器登录（二选一）
 
-- **添加账号**：点击「添加账号」按钮，填写账号信息
-- **编辑账号**：修改账号名称、Provider、认证信息
-- **删除账号**：删除不需要的账号
-- **启用 / 禁用**：临时停用某个账号的自动签到
+#### Cookie 模式
 
-### Provider 管理
-
-Provider 是签到目标平台的配置。系统内置了三个 Provider：
-
-| 名称 | 域名 | WAF 绕过 |
-|------|------|----------|
-| new-api | https://new-api.example.com | waf_cookies |
-| anyrouter | https://anyrouter.top | waf_cookies |
-| agentrouter | https://agentrouter.org | waf_cookies |
-
-内置 Provider 为只读，不可编辑或删除。如果你需要签到其他 NewAPI / OneAPI 平台，可以点击「添加 Provider」自行配置。
-
-新增 Provider 时可先选择模板：
-- `new-api 标准模板`：预填推荐域名和常用路径。
-- `agentrouter 自动签到模板`：预填 agentrouter 推荐配置。
-- `完全自定义`：保留当前填写内容，不覆盖任何字段。
-
-模板只提供建议值，所有字段都可以继续手动修改并以最终输入值保存。
-
-添加自定义 Provider 时需要填写：
-
-| 字段 | 说明 | 默认值 |
-|------|------|--------|
-| 名称 | 唯一标识，添加账号时会用到 | - |
-| 域名 | 平台的完整域名，如 `https://example.com` | - |
-| 登录路径 | 登录页面路径 | `/login` |
-| 签到路径 | 签到 API 路径 | `/api/user/sign_in` |
-| 用户信息路径 | 获取用户余额的 API 路径 | `/api/user/self` |
-| API User Key | 请求头中的用户标识字段名 | `new-api-user` |
-| WAF 绕过方式 | 无（直接访问）或 WAF Cookies（Playwright） | 无 |
-| WAF Cookie 名称 | 需要获取的 WAF Cookie 名，逗号分隔 | - |
-
-保存时会进行基础校验：域名必须为 `http(s)://` 完整地址；WAF Cookie 名称仅允许字母、数字、下划线和短横线。
-
-#### 多域名 new-api 配置示例
-
-当你需要同时管理多个 `new-api` 部署时，建议按“一个域名一个 Provider”配置：
-
-1. 在 Provider 管理中新增 `new-api-a`，域名填写 `https://a.example.com`。
-2. 再新增 `new-api-b`，域名填写 `https://b.example.com`。
-3. 在账号管理中将账号分别绑定到 `new-api-a` / `new-api-b`。
-4. 执行手动签到，确认两组账号日志都写入正确 Provider 与域名链路。
-
-### 执行日志
-
-记录所有签到操作的详细日志，支持按 **状态**（成功 / 失败）和 **账号** 筛选，带分页功能。
-
-每条日志包含：时间、账号、Provider、状态、余额、已用额度、触发方式（手动 / 定时）、详细信息。
-系统会在展示层对失败信息做归类（如认证失败、WAF 拦截、网络错误、未知错误），并保留原始 message 便于排查。
-若状态为 `already_checked_in`，页面会显示“今日已签到”，并明确标记为无需修复动作。
-仪表盘「最近执行」区域默认展示最近 10 条，并提供「查看全部执行记录」入口跳转日志历史页。
-日志历史页在分页时会保持筛选条件，并按时间倒序（同秒按 ID 倒序）返回记录切片。
-
----
-
-## 账号认证方式
-
-添加账号时可以选择两种认证方式：
-
-### Cookie 模式
-
-手动从浏览器提取 Cookie 和 API User ID，适合所有平台。
+需要手动从浏览器提取两个值：
 
 **获取 Cookie：**
 
-1. 打开浏览器访问目标平台（如 https://anyrouter.top/）并登录
+1. 打开目标平台网站并登录
 2. 按 F12 打开开发者工具
-3. 切换到 **Application**（应用）选项卡
-4. 在左侧找到 **Cookies**，点击对应域名
-5. 找到 `session` 字段，复制其值
+3. 进入 **Application**（应用）→ **Cookies** → 点击对应域名
+4. 找到 `session` 字段，复制其值
 
-在添加账号时，Cookies 字段支持两种格式：
+Cookies 字段支持两种格式：
 
 ```
-# JSON 格式
-{"session": "你的session值"}
+# 直接粘贴 session 值
+eyJhbGciOiJIUzI1NiIs...
 
-# 字符串格式
-session=你的session值
+# 或 JSON 格式
+{"session": "eyJhbGciOiJIUzI1NiIs..."}
 ```
 
 **获取 API User ID：**
 
-1. 在开发者工具中切换到 **Network**（网络）选项卡
+1. 在开发者工具中进入 **Network**（网络）选项卡
 2. 勾选 **Fetch/XHR** 过滤
-3. 在页面上进行任意操作（如刷新页面）
-4. 找到任意请求，查看请求头中的 `New-Api-User` 字段
+3. 刷新页面或进行任意操作
+4. 点击任意请求，在请求头中找到 `New-Api-User` 字段
 5. 复制该值（一串数字）
 
-### 浏览器自动登录
+#### 浏览器自动登录
 
-通过无头浏览器自动完成登录和签到，无需手动提取 Cookie。
+无需手动提取 Cookie，只需填写用户名/邮箱和密码。系统会通过无头浏览器自动完成登录、签到和余额查询。
 
-只需填写：
+> 浏览器模式每次签到会启动浏览器进程，资源消耗略高。如果 Cookie 长期稳定，推荐 Cookie 模式。
 
-- **用户名 / 邮箱**：你的登录账号
-- **密码**：你的登录密码
+### Provider 说明
 
-系统会使用 Playwright 无头浏览器自动打开登录页面、填写账号密码、完成登录后自动签到并获取余额信息。
+Provider 是签到目标平台的配置。系统内置以下 Provider：
 
-> **注意**：浏览器自动登录方式每次签到都会启动浏览器进程，资源消耗略高于 Cookie 模式。如果 Cookie 长期稳定，推荐使用 Cookie 模式。
+| 名称 | 说明 | 域名 |
+|------|------|------|
+| `newapi` | NewAPI 标准模板（无 WAF） | 创建账号时填写 |
+| `newapi-waf` | NewAPI + WAF 绕过模板 | 创建账号时填写 |
+| `anyrouter` | AnyRouter 平台 | anyrouter.top（固定） |
+| `agentrouter` | AgentRouter 平台 | agentrouter.org（固定） |
 
----
+**签到 AnyRouter / AgentRouter**：直接选择对应 Provider，无需填域名。
 
-## 签到间隔设置
+**签到其他 NewAPI 站点**：选择 `newapi`（大多数情况）或 `newapi-waf`（站点有阿里云 WAF 防护时），然后在域名栏填写站点地址，如 `https://api.example.com`。多个 NewAPI 站点只需创建多个账号，分别填不同域名即可，不用重复创建 Provider。
 
-在仪表盘右上角可以设置签到间隔，提供以下预设选项：
+**自定义 Provider**：如果目标平台的 API 路径与 NewAPI 标准不同，可在「Provider 管理」中添加自定义 Provider，手动配置所有字段。
 
-| 选项 | Cron 表达式 | 说明 |
-|------|-------------|------|
-| 每 1 小时 | `0 * * * *` | 每小时整点执行 |
-| 每 2 小时 | `0 */2 * * *` | 每 2 小时执行 |
-| 每 4 小时 | `0 */4 * * *` | 每 4 小时执行 |
-| 每 6 小时 | `0 */6 * * *` | 默认值 |
-| 每 8 小时 | `0 */8 * * *` | 每 8 小时执行 |
-| 每 12 小时 | `0 */12 * * *` | 每 12 小时执行 |
-| 每天一次 | `0 0 * * *` | 每天 0 点执行 |
-| 自定义 | 自行输入 | 标准 5 字段 Cron 表达式 |
+### WAF 绕过
 
-选择预设选项会立即生效；选择「自定义」后需要输入 Cron 表达式并点击「保存」。
+部分站点使用 WAF（如阿里云 WAF）防护，直接请求会被拦截。选择 `newapi-waf` 模板或在自定义 Provider 中设置 WAF 绕过为 `waf_cookies` 即可。
 
-设置会持久化到数据库，容器重启后保留。
+如果你不确定是否需要 WAF 绕过，可以先选 `newapi`（不绕过）。如果签到失败且开启了 WAF 绕过，系统会自动尝试关闭 WAF 重试，并在日志中提示你调整设置。
 
-> AnyRouter 的签到间隔约为 24 小时（非零点重置），建议设置为每 6 ~ 8 小时签到一次以确保不遗漏。
+### 签到间隔
+
+在仪表盘右上角选择签到频率：
+
+| 选项 | Cron 表达式 |
+|------|------------|
+| 每 1 小时 | `0 * * * *` |
+| 每 2 小时 | `0 */2 * * *` |
+| 每 4 小时 | `0 */4 * * *` |
+| 每 6 小时 | `0 */6 * * *`（默认） |
+| 每 8 小时 | `0 */8 * * *` |
+| 每 12 小时 | `0 */12 * * *` |
+| 每天一次 | `0 0 * * *` |
+| 自定义 | 标准 5 字段 Cron |
+
+> AnyRouter 签到间隔约 24 小时（非零点重置），建议每 6~8 小时签到一次以确保不遗漏。
+
+### 执行日志
+
+「执行日志」页面记录所有签到操作，支持按状态和账号筛选，带分页。
+
+每条日志包含：时间、账号、Provider、状态、余额、已用额度、触发方式（手动/定时）、详细信息。失败日志会自动归类原因并给出建议。
 
 ---
 
 ## 通知配置
 
-签到失败时会自动发送通知。在 `docker-compose.yml` 中取消对应通知方式的注释并填入配置即可。
+签到失败或余额变化时自动发送通知。在 `docker-compose.yml` 中取消对应通知方式的注释并填入配置：
 
 ### Telegram Bot
 
 ```yaml
-- TELEGRAM_BOT_TOKEN=你的Bot Token
-- TELEGRAM_CHAT_ID=你的Chat ID
+- TELEGRAM_BOT_TOKEN=你的Bot_Token
+- TELEGRAM_CHAT_ID=你的Chat_ID
 ```
 
 ### 钉钉机器人
@@ -322,14 +242,12 @@ session=你的session值
 ### Bark
 
 ```yaml
-- BARK_KEY=你的Bark Key
+- BARK_KEY=你的Bark_Key
 # 可选，默认 https://api.day.app
 - BARK_SERVER=自建Bark服务器地址
 ```
 
-每种通知方式独立工作，可以同时启用多种。未配置或配置错误的通知方式会自动跳过。
-
-修改通知配置后需要重启容器生效：
+可同时启用多种通知方式。修改后需重启容器：
 
 ```bash
 docker compose up -d
@@ -339,17 +257,16 @@ docker compose up -d
 
 ## GitHub Actions 方式
 
-如果不想自建服务，也可以通过 GitHub Actions 运行。
+不想自建服务器也可通过 GitHub Actions 运行。
 
 ### 1. Fork 本仓库
 
-### 2. 配置 Environment Secret
+### 2. 配置 Secrets
 
-1. 进入仓库 **Settings** → **Environments** → **New environment**
-2. 新建名为 `production` 的环境
-3. 添加 Secret：
-   - Name: `ANYROUTER_ACCOUNTS`
-   - Value: JSON 格式的账号配置
+进入仓库 **Settings** → **Environments** → 新建 `production` 环境，添加 Secret：
+
+- Name: `ANYROUTER_ACCOUNTS`
+- Value: JSON 格式账号配置
 
 ```json
 [
@@ -367,124 +284,43 @@ docker compose up -d
 ]
 ```
 
-字段说明：
-
 | 字段 | 必需 | 说明 |
 |------|------|------|
 | `cookies` | 是 | 身份验证 Cookie |
 | `api_user` | 是 | New-Api-User 请求头的值 |
-| `name` | 否 | 账号显示名称，默认为 `Account 1`、`Account 2` |
-| `provider` | 否 | 服务商标识，默认 `anyrouter` |
+| `name` | 否 | 显示名称 |
+| `provider` | 否 | Provider 标识，默认 `anyrouter` |
 
 ### 3. 启用 Actions
 
-1. 进入仓库 **Actions** 选项卡
-2. 找到「AnyRouter 自动签到」workflow 并启用
-3. 可以手动点击 **Run workflow** 测试
+进入 **Actions** → 启用「AnyRouter 自动签到」→ 可手动 **Run workflow** 测试。
 
-### 4. 自定义 Provider（可选）
+### 4. 通知配置（可选）
 
-如果需要签到其他平台，添加名为 `PROVIDERS` 的 Secret：
-
-```json
-{
-  "customrouter": {
-    "domain": "https://custom.example.com",
-    "sign_in_path": "/api/user/sign_in",
-    "user_info_path": "/api/user/self",
-    "bypass_method": "waf_cookies",
-    "waf_cookie_names": ["acw_tc"]
-  }
-}
-```
-
-### 5. 通知配置
-
-在 `production` 环境的 Secrets 中添加对应的通知环境变量（参见 [通知配置](#通知配置) 章节）。
-
----
-
-## 本地开发
-
-```bash
-# 安装依赖
-uv sync --dev
-
-# 安装 Playwright 浏览器
-uv run playwright install chromium
-
-# 启动 Web 服务（开发模式）
-ADMIN_PASSWORD=admin uv run uvicorn web.app:app --host 0.0.0.0 --port 8080 --reload
-
-# 或直接运行签到脚本（需配置 .env）
-uv run checkin.py
-
-# 运行测试
-uv run pytest tests/
-
-# 运行 new-api 回归矩阵（签到流/Provider 表单/日志导航筛选）
-uv run pytest -q \
-  tests/test_checkin_branches.py \
-  tests/test_provider_form_matrix.py \
-  tests/test_dashboard_recent_logs_entry.py \
-  tests/test_logs_pagination_stability.py \
-  tests/test_provider_validation.py \
-  tests/test_failure_reason_classifier.py
-```
-
----
-
-## 发布与回滚清单
-
-### 发布前检查（Rollout）
-
-1. 执行回归矩阵命令，确认关键测试全部通过。
-2. 在页面手工验证：Provider 模板切换、日志页筛选翻页、失败分类文案。
-3. 确认中文文案完整：新增按钮、标签、提示、校验错误均为中文。
-4. 确认视觉无漂移：边框、配色、字体、卡片布局与既有页面一致。
-5. 抽样检查日志：`already_checked_in` 显示为“无需修复动作”。
-
-### 回滚清单（Rollback）
-
-1. 先回滚前端模板变更（`web/templates/*.html`）以快速恢复展示层。
-2. 如需继续回滚，按提交顺序回退日志归类与筛选分页改动。
-3. 保留数据库数据，不执行数据迁移回滚（当前改动未引入新表字段）。
-4. 回滚后执行最小烟测：登录、手动签到、日志列表加载、Provider 新增保存。
-5. 在发布记录中标注回滚原因与待修复 issue，再安排补丁发布。
-
-### UI 复核项
-
-1. 新增入口与按钮文案是否全部中文。
-2. 失败分类提示是否可读，原始 message 是否可展开查看。
-3. 模板新增交互是否复用当前样式体系（无新主题、无重排）。
-4. 移动端与桌面端下，Provider 弹窗和日志表格是否可正常阅读。
+在 `production` 环境的 Secrets 中添加对应通知环境变量（参见上方通知配置章节）。
 
 ---
 
 ## 故障排除
 
-### 签到失败
-
 | 现象 | 可能原因 | 解决方法 |
 |------|----------|----------|
 | 401 错误 | Cookie 已过期 | 重新获取 Cookie 或改用浏览器自动登录 |
-| Error 1040 Too many connections | 平台数据库问题 | 等待一段时间后重试 |
-| 浏览器登录超时 | 网络问题或页面结构变化 | 检查容器日志 `docker logs anyrouter-checkin` |
+| Turnstile token 为空 | 站点启用了 Cloudflare Turnstile 验证 | 该站点暂不支持 Cookie 模式签到 |
+| 浏览器登录超时 | 网络问题或页面结构变化 | 检查日志 `docker logs anyrouter-checkin` |
 | Provider not found | 账号关联的 Provider 不存在 | 在 Provider 管理中添加对应配置 |
+| WAF 绕过提示 | 不需要 WAF 绕过 | 将 Provider 的 WAF 绕过设置为空 |
 
-### 容器相关
+### 常用命令
 
 ```bash
-# 查看容器状态
-docker ps --filter name=anyrouter-checkin
-
-# 查看容器日志
+# 查看日志
 docker logs anyrouter-checkin --tail 50
 
 # 实时查看日志
 docker logs -f anyrouter-checkin
 
-# 重启容器
+# 重启
 docker compose restart
 
 # 完全重建
@@ -493,7 +329,7 @@ docker compose down && docker compose up -d --build
 
 ### 数据备份
 
-所有数据保存在 `./data/checkin.db`（SQLite 数据库），备份此文件即可。
+所有数据保存在 `./data/checkin.db`（SQLite），备份此文件即可。
 
 ---
 

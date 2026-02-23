@@ -70,6 +70,8 @@ async def init_db():
 			);
 		''')
 		await _init_builtin_providers(db)
+		await _migrate_builtin_provider_paths(db)
+		await _migrate_old_newapi_provider(db)
 		await _migrate_accounts_table(db)
 		await db.commit()
 	finally:
@@ -78,7 +80,9 @@ async def init_db():
 
 async def _init_builtin_providers(db):
 	builtins = [
-		('new-api', 'https://new-api.example.com', '/login', '/api/user/sign_in',
+		('newapi', '', '/login', '/api/user/checkin',
+		 '/api/user/self', 'new-api-user', None, None),
+		('newapi-waf', '', '/login', '/api/user/checkin',
 		 '/api/user/self', 'new-api-user', 'waf_cookies',
 		 json.dumps(['acw_tc'])),
 		('anyrouter', 'https://anyrouter.top', '/login', '/api/user/sign_in',
@@ -100,6 +104,22 @@ async def _init_builtin_providers(db):
 			)
 
 
+async def _migrate_builtin_provider_paths(db):
+	"""Update built-in new-api provider sign_in_path from old /api/user/sign_in to /api/user/checkin."""
+	await db.execute(
+		"UPDATE providers SET sign_in_path = '/api/user/checkin' "
+		"WHERE name = 'new-api' AND is_builtin = 1 AND sign_in_path = '/api/user/sign_in'"
+	)
+
+
+async def _migrate_old_newapi_provider(db):
+	"""Downgrade old 'new-api' built-in provider to custom so users can edit/delete it."""
+	existing = await db.execute("SELECT id FROM providers WHERE name = 'new-api' AND is_builtin = 1")
+	row = await existing.fetchone()
+	if row:
+		await db.execute("UPDATE providers SET is_builtin = 0 WHERE name = 'new-api'")
+
+
 async def _migrate_accounts_table(db):
 	"""Add new columns to existing accounts table if missing."""
 	cursor = await db.execute('PRAGMA table_info(accounts)')
@@ -108,6 +128,7 @@ async def _migrate_accounts_table(db):
 		('auth_method', "ALTER TABLE accounts ADD COLUMN auth_method TEXT NOT NULL DEFAULT 'cookie'"),
 		('username', "ALTER TABLE accounts ADD COLUMN username TEXT NOT NULL DEFAULT ''"),
 		('password', "ALTER TABLE accounts ADD COLUMN password TEXT NOT NULL DEFAULT ''"),
+		('domain', "ALTER TABLE accounts ADD COLUMN domain TEXT NOT NULL DEFAULT ''"),
 	]
 	for col_name, sql in migrations:
 		if col_name not in columns:
@@ -148,15 +169,16 @@ async def get_enabled_accounts():
 
 async def create_account(name: str, provider: str, auth_method: str = 'cookie',
 						 cookies: str = '', api_user: str = '',
-						 username: str = '', password: str = ''):
+						 username: str = '', password: str = '',
+						 domain: str = ''):
 	now = datetime.now().isoformat()
 	db = await get_db()
 	try:
 		cursor = await db.execute(
 			'''INSERT INTO accounts (name, provider, auth_method, cookies, api_user,
-			   username, password, enabled, created_at, updated_at)
-			   VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)''',
-			(name, provider, auth_method, cookies, api_user, username, password, now, now)
+			   username, password, domain, enabled, created_at, updated_at)
+			   VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)''',
+			(name, provider, auth_method, cookies, api_user, username, password, domain, now, now)
 		)
 		await db.commit()
 		return cursor.lastrowid

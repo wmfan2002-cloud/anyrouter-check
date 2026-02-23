@@ -99,6 +99,7 @@ async def _build_provider_config(provider_name: str) -> ProviderConfig | None:
 	providers = await get_all_providers()
 	for p in providers:
 		if p['name'] == provider_name:
+			domain = (p['domain'] or '').rstrip('/')
 			waf_names = None
 			if p['waf_cookie_names']:
 				try:
@@ -107,7 +108,7 @@ async def _build_provider_config(provider_name: str) -> ProviderConfig | None:
 					waf_names = None
 			return ProviderConfig(
 				name=p['name'],
-				domain=p['domain'],
+				domain=domain,
 				login_path=p['login_path'] or '/login',
 				sign_in_path=p['sign_in_path'],
 				user_info_path=p['user_info_path'] or '/api/user/self',
@@ -141,6 +142,17 @@ async def run_checkin_single(account_row: dict, triggered_by='manual') -> dict:
 		return await _run_cookie_checkin(account_row, triggered_by)
 
 
+def _resolve_domain(provider_config, account_row: dict) -> str | None:
+	"""Resolve domain: use account domain if provider has no domain (template provider)."""
+	if provider_config.domain:
+		return provider_config.domain
+	account_domain = (account_row.get('domain') or '').rstrip('/')
+	if account_domain:
+		provider_config.domain = account_domain
+		return account_domain
+	return None
+
+
 async def _run_browser_login_checkin(account_row: dict, triggered_by: str) -> dict:
 	"""使用浏览器登录方式签到"""
 	from web.browser_checkin import browser_login_checkin
@@ -148,6 +160,18 @@ async def _run_browser_login_checkin(account_row: dict, triggered_by: str) -> di
 	provider_config = await _build_provider_config(account_row['provider'])
 	if not provider_config:
 		msg = f'Provider "{account_row["provider"]}" not found'
+		await add_checkin_log(
+			account_id=account_row['id'],
+			account_name=account_row['name'],
+			provider=account_row['provider'],
+			status='failed',
+			message=msg,
+			triggered_by=triggered_by,
+		)
+		return {'success': False, 'message': msg}
+
+	if not _resolve_domain(provider_config, account_row):
+		msg = f'Provider "{account_row["provider"]}" 无域名，且账号未指定域名'
 		await add_checkin_log(
 			account_id=account_row['id'],
 			account_name=account_row['name'],
@@ -166,6 +190,7 @@ async def _run_browser_login_checkin(account_row: dict, triggered_by: str) -> di
 			username=account_row.get('username', ''),
 			password=account_row.get('password', ''),
 			user_info_path=provider_config.user_info_path,
+			sign_in_path=provider_config.sign_in_path,
 		)
 
 		message = result.get('message', '')
@@ -227,12 +252,36 @@ async def _run_cookie_checkin(account_row: dict, triggered_by: str) -> dict:
 		)
 		return {'success': False, 'message': msg}
 
+	if not _resolve_domain(provider_config, account_row):
+		msg = f'Provider "{account_row["provider"]}" 无域名，且账号未指定域名'
+		await add_checkin_log(
+			account_id=account_row['id'],
+			account_name=account_row['name'],
+			provider=account_row['provider'],
+			status='failed',
+			message=msg,
+			triggered_by=triggered_by,
+		)
+		return {'success': False, 'message': msg}
+
 	# Build a temporary AppConfig with the resolved provider
 	app_config = AppConfig(providers={account_row['provider']: provider_config})
 	account_config = _db_account_to_config(account_row, 0)
 
 	try:
 		success, user_info = await check_in_account(account_config, 0, app_config)
+
+		# WAF 自动回退：如果签到失败且 Provider 开启了 WAF 绕过，尝试不使用 WAF 重试
+		waf_hint = ''
+		if not success and provider_config.needs_waf_cookies():
+			logger.info(f'WAF bypass failed for {account_row["name"]}, retrying without WAF...')
+			from dataclasses import replace as dc_replace
+			provider_no_waf = dc_replace(provider_config, bypass_method=None, waf_cookie_names=None)
+			app_config_retry = AppConfig(providers={account_row['provider']: provider_no_waf})
+			success, user_info = await check_in_account(account_config, 0, app_config_retry)
+			if success:
+				waf_hint = '签到成功（无需 WAF 绕过），建议将该 Provider 的 WAF 绕过设置为「无」'
+				logger.info(f'{account_row["name"]}: {waf_hint}')
 
 		balance = user_info.get('quota') if user_info and user_info.get('success') else None
 		used = user_info.get('used_quota') if user_info and user_info.get('success') else None
@@ -260,6 +309,9 @@ async def _run_cookie_checkin(account_row: dict, triggered_by: str) -> dict:
 			msg = 'Already checked in today'
 		if not success and not msg:
 			msg = 'Check-in failed (WAF bypass or request error)'
+
+		if waf_hint:
+			msg = f'{msg} | {waf_hint}' if msg else waf_hint
 
 		# Update account status
 		update_data = {

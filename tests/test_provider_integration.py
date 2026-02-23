@@ -20,7 +20,7 @@ def test_default_providers_include_new_api(monkeypatch):
 	provider = config.providers['new-api']
 	assert provider.domain == 'https://new-api.example.com'
 	assert provider.login_path == '/login'
-	assert provider.sign_in_path == '/api/user/sign_in'
+	assert provider.sign_in_path == '/api/user/checkin'
 	assert provider.user_info_path == '/api/user/self'
 	assert provider.api_user_key == 'new-api-user'
 
@@ -52,7 +52,7 @@ def test_init_builtin_providers_contains_new_api_defaults():
 	assert len(new_api_rows) == 1
 	assert new_api_rows[0][1] == 'https://new-api.example.com'
 	assert new_api_rows[0][2] == '/login'
-	assert new_api_rows[0][3] == '/api/user/sign_in'
+	assert new_api_rows[0][3] == '/api/user/checkin'
 	assert new_api_rows[0][4] == '/api/user/self'
 	assert new_api_rows[0][5] == 'new-api-user'
 

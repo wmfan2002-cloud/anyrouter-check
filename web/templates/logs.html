@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 {% block title %}执行日志 - AnyRouter Check-in{% endblock %}
 {% block content %}
-<div class="max-w-5xl">
-	<div class="flex items-center justify-between mb-8">
+<div class="w-full">
+	<div class="flex items-center justify-between mb-8 gap-4 flex-wrap">
 		<div class="relative">
 			<h2 class="text-3xl font-black tracking-tight text-black">执行日志</h2>
 			<div class="absolute -top-2 -left-4 w-4 h-4 bg-[#ff9ff3] rounded-full border-2 border-black"></div>
 		</div>
-		<div class="flex items-center space-x-3">
+		<div class="flex items-center space-x-3 flex-wrap">
 			<select id="filter-status" onchange="applyFilter()"
 				class="px-4 py-2.5 bg-white border-4 border-black text-black font-black text-sm focus:outline-none shadow-[4px_4px_0px_#ff9ff3]">
 				<option value="">全部状态</option>
@@ -26,8 +26,8 @@
 	</div>
 
 	{% if logs %}
-	<div class="border-4 border-black bg-white shadow-[8px_8px_0px_#000] overflow-hidden">
-		<table class="w-full text-sm">
+	<div class="border-4 border-black bg-white shadow-[8px_8px_0px_#000] overflow-x-auto">
+		<table class="min-w-full text-sm table-auto">
 			<thead class="bg-[#ff9ff3] border-b-4 border-black">
 				<tr>
 					<th class="text-left px-4 py-3 font-black text-black text-xs">时间</th>
@@ -43,9 +43,9 @@
 			<tbody>
 				{% for log in logs %}
 				<tr class="border-b-4 border-black {% if loop.index is odd %}bg-white{% else %}bg-pink-100{% endif %}">
-					<td class="px-4 py-3 font-bold text-black text-xs whitespace-nowrap">{{ log.created_at[:19] }}</td>
-					<td class="px-4 py-3 font-black text-black">{{ log.account_name }}</td>
-					<td class="px-4 py-3 font-bold text-black">{{ log.provider }}</td>
+					<td class="px-4 py-3 font-bold text-black text-xs whitespace-nowrap">{{ log.created_at[:16] }}</td>
+					<td class="px-4 py-3 font-black text-black"><span class="block max-w-[160px] truncate" title="{{ log.account_name }}">{{ log.account_name }}</span></td>
+					<td class="px-4 py-3 font-bold text-black"><span class="block max-w-[100px] truncate" title="{{ log.provider }}">{{ log.provider }}</span></td>
 					<td class="px-4 py-3">
 						<span class="inline-flex px-2 py-0.5 border-4 border-black text-xs font-black
 							{% if log.status == 'success' %}bg-[#1dd1a1] text-black
@@ -63,7 +63,7 @@
 							{% if log.triggered_by == 'manual' %}手动{% else %}定时{% endif %}
 						</span>
 					</td>
-					<td class="px-4 py-3 text-xs max-w-sm">
+					<td class="px-4 py-3 text-xs max-w-[280px]">
 						{% if log.status != 'success' %}
 						<div class="mb-1">
 							<span class="inline-flex px-2 py-0.5 border-4 border-black text-[11px] font-black

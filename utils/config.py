@@ -63,7 +63,7 @@ class ProviderConfig:
 
 	def needs_manual_check_in(self) -> bool:
 		"""判断是否需要手动调用签到接口"""
-		return self.bypass_method == 'waf_cookies'
+		return self.sign_in_path is not None
 
 
 @dataclass
@@ -76,11 +76,21 @@ class AppConfig:
 	def load_from_env(cls) -> 'AppConfig':
 		"""从环境变量加载配置"""
 		providers = {
-			'new-api': ProviderConfig(
-				name='new-api',
-				domain='https://new-api.example.com',
+			'newapi': ProviderConfig(
+				name='newapi',
+				domain='',
 				login_path='/login',
-				sign_in_path='/api/user/sign_in',
+				sign_in_path='/api/user/checkin',
+				user_info_path='/api/user/self',
+				api_user_key='new-api-user',
+				bypass_method=None,
+				waf_cookie_names=None,
+			),
+			'newapi-waf': ProviderConfig(
+				name='newapi-waf',
+				domain='',
+				login_path='/login',
+				sign_in_path='/api/user/checkin',
 				user_info_path='/api/user/self',
 				api_user_key='new-api-user',
 				bypass_method='waf_cookies',

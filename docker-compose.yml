@@ -8,7 +8,7 @@ services:
       - ./data:/app/data
     environment:
       - TZ=Asia/Shanghai
-      - ADMIN_PASSWORD=admin
+      - ADMIN_PASSWORD=admin123
       # --- 通知配置（可选，按需取消注释） ---
       # - TELEGRAM_BOT_TOKEN=
       # - TELEGRAM_CHAT_ID=

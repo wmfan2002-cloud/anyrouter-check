@@ -288,14 +288,17 @@ async def check_in_account(account: AccountConfig, account_index: int, app_confi
 		}
 
 		user_info_url = f'{provider_config.domain}{provider_config.user_info_path}'
-		user_info = get_user_info(client, headers, user_info_url)
-		if user_info and user_info.get('success'):
-			print(user_info['display'])
-		elif user_info:
-			print(user_info.get('error', 'Unknown error'))
 
 		if provider_config.needs_manual_check_in():
 			check_in_result = execute_check_in(client, account_name, provider_config, headers)
+
+			# Fetch balance AFTER check-in so we get the updated value
+			user_info = get_user_info(client, headers, user_info_url)
+			if user_info and user_info.get('success'):
+				print(user_info['display'])
+			elif user_info:
+				print(user_info.get('error', 'Unknown error'))
+
 			user_info_dict = user_info.copy() if isinstance(user_info, dict) else {}
 			user_info_dict['checkin_status'] = check_in_result['status']
 			user_info_dict['checkin_message'] = check_in_result['message']
@@ -306,6 +309,12 @@ async def check_in_account(account: AccountConfig, account_index: int, app_confi
 
 			return check_in_result['success'], user_info_dict
 		else:
+			# No explicit check-in needed; fetching user info triggers auto check-in
+			user_info = get_user_info(client, headers, user_info_url)
+			if user_info and user_info.get('success'):
+				print(user_info['display'])
+			elif user_info:
+				print(user_info.get('error', 'Unknown error'))
 			print(f'[INFO] {account_name}: Check-in completed automatically (triggered by user info request)')
 			return True, user_info
 

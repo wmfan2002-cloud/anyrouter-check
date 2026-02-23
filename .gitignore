@@ -1,11 +1,25 @@
+# IDE / AI 工具
 .claude
+.codex/
+.cursor/
+
+# Python
 .env
 .venv
 __pycache__
 .pytest_cache
 .ruff_cache
-balance_hash.txt
 
-.DS_Store
+# 运行时数据
+balance_hash.txt
 data/
+
+# 系统文件
+.DS_Store
+
+# 开发文档 / 临时文件
 PLAN.md
+NEW_API_CHECKIN_PLAN.md
+issues/
+openspec/
+new-api/

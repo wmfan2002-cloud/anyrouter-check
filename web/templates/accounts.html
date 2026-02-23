@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% block title %}账号管理 - AnyRouter Check-in{% endblock %}
 {% block content %}
-<div class="max-w-5xl">
-	<div class="flex items-center justify-between mb-8">
+<div class="w-full">
+	<div class="flex items-center justify-between mb-8 gap-4 flex-wrap">
 		<div class="relative">
 			<h2 class="text-3xl font-black tracking-tight text-black">账号管理</h2>
 			<div class="absolute -top-2 -left-4 w-4 h-4 bg-[#48dbfb] rounded-full border-2 border-black"></div>
@@ -15,8 +15,8 @@
 	</div>
 
 	{% if accounts %}
-	<div class="border-4 border-black bg-white shadow-[8px_8px_0px_#000] overflow-hidden">
-		<table class="w-full text-sm">
+	<div class="border-4 border-black bg-white shadow-[8px_8px_0px_#000] overflow-x-auto">
+		<table class="min-w-full text-sm table-auto">
 			<thead class="bg-[#48dbfb] border-b-4 border-black">
 				<tr>
 					<th class="text-left px-4 py-3 font-black text-black text-xs">名称</th>
@@ -34,7 +34,7 @@
 					<td class="px-4 py-3">
 						<div class="flex items-center">
 							<span class="w-4 h-4 border-4 border-black mr-2 {% if acc.enabled %}bg-[#1dd1a1]{% else %}bg-white{% endif %}"></span>
-							<span class="font-black text-black">{{ acc.name }}</span>
+							<span class="font-black text-black max-w-[200px] truncate inline-block align-middle" title="{{ acc.name }}">{{ acc.name }}</span>
 						</div>
 					</td>
 					<td class="px-4 py-3 font-bold text-black">{{ acc.provider }}</td>
@@ -102,12 +102,23 @@
 				</div>
 				<div>
 					<label class="block text-sm font-black text-black mb-1">Provider</label>
-					<select id="field-provider"
+					<select id="field-provider" onchange="onProviderChange()"
 						class="w-full px-4 py-2.5 bg-white border-4 border-black text-black font-bold focus:outline-none shadow-[4px_4px_0px_#48dbfb]">
 						{% for p in providers %}
+						{% if p.domain %}
 						<option value="{{ p.name }}">{{ p.name }} ({{ p.domain }})</option>
+						{% else %}
+						<option value="{{ p.name }}">{{ p.name }} (需填写域名)</option>
+						{% endif %}
 						{% endfor %}
 					</select>
+				</div>
+				<div id="domain-field" class="hidden">
+					<label class="block text-sm font-black text-black mb-1">域名</label>
+					<input type="url" id="field-domain"
+						class="w-full px-4 py-2.5 bg-white border-4 border-black text-black font-bold placeholder:text-black/30 focus:outline-none shadow-[4px_4px_0px_#48dbfb] transition-all duration-150 focus:shadow-[4px_4px_0px_#ff6b6b]"
+						placeholder="https://your-newapi-site.com">
+					<p class="text-xs font-bold text-black/60 mt-1">该 Provider 为模板，请填写你的 NewAPI 站点完整域名</p>
 				</div>
 				<div>
 					<label class="block text-sm font-black text-black mb-2">认证方式</label>
@@ -176,6 +187,21 @@
 
 {% block scripts %}
 <script>
+const PROVIDER_DATA = {{ providers|tojson }};
+function isTemplateProvider(providerName) {
+	const p = PROVIDER_DATA.find(p => p.name === providerName);
+	return p && !p.domain;
+}
+function onProviderChange() {
+	const provider = document.getElementById('field-provider').value;
+	const domainField = document.getElementById('domain-field');
+	if (isTemplateProvider(provider)) {
+		domainField.classList.remove('hidden');
+	} else {
+		domainField.classList.add('hidden');
+		document.getElementById('field-domain').value = '';
+	}
+}
 function switchAuthMethod(method) {
 	document.getElementById('field-auth-method').value = method;
 	const cookieFields = document.getElementById('cookie-fields');
@@ -199,11 +225,13 @@ function showAddModal() {
 	document.getElementById('edit-id').value = '';
 	document.getElementById('field-name').value = '';
 	document.getElementById('field-provider').value = 'anyrouter';
+	document.getElementById('field-domain').value = '';
 	document.getElementById('field-cookies').value = '';
 	document.getElementById('field-api-user').value = '';
 	document.getElementById('field-username').value = '';
 	document.getElementById('field-password').value = '';
 	switchAuthMethod('cookie');
+	onProviderChange();
 	document.getElementById('account-modal').classList.remove('hidden');
 	document.getElementById('account-modal').classList.add('flex');
 }
@@ -212,6 +240,8 @@ function showEditModal(acc) {
 	document.getElementById('edit-id').value = acc.id;
 	document.getElementById('field-name').value = acc.name;
 	document.getElementById('field-provider').value = acc.provider;
+	document.getElementById('field-domain').value = acc.domain || '';
+	onProviderChange();
 	const method = acc.auth_method || 'cookie';
 	switchAuthMethod(method);
 	if (method === 'browser_login') {
@@ -236,7 +266,7 @@ async function submitAccount(e) {
 	e.preventDefault();
 	const id = document.getElementById('edit-id').value;
 	const authMethod = document.getElementById('field-auth-method').value;
-	const data = { name: document.getElementById('field-name').value, provider: document.getElementById('field-provider').value, auth_method: authMethod };
+	const data = { name: document.getElementById('field-name').value, provider: document.getElementById('field-provider').value, auth_method: authMethod, domain: document.getElementById('field-domain').value };
 	if (authMethod === 'browser_login') {
 		data.username = document.getElementById('field-username').value;
 		data.password = document.getElementById('field-password').value;
@@ -255,7 +285,11 @@ async function deleteAccount(id, name) {
 	if (!confirm(`确定删除账号 "${name}" 吗？`)) return;
 	const res = await fetch(`/api/accounts/${id}`, { method: 'DELETE' });
 	const result = await res.json();
-	if (result.success) { showToast('账号已删除', 'success'); setTimeout(() => location.reload(), 500); }
+	if (result.success) {
+		showToast('账号已删除', 'success');
+		const row = document.getElementById('row-' + id);
+		if (row) row.remove();
+	}
 	else { showToast(result.message || '删除失败', 'error'); }
 }
 async function toggleAccount(id) {
