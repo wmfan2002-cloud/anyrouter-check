@@ -49,11 +49,14 @@ async def api_create_account(request: Request):
 		api_user = data.get('api_user', '').strip()
 		if not cookies_raw or not api_user:
 			return JSONResponse({'success': False, 'message': '请填写 Cookies 和 API User ID'})
-		try:
-			if cookies_raw.startswith('{'):
+		# Auto-wrap plain session value into JSON format
+		if not cookies_raw.startswith('{'):
+			cookies_raw = json.dumps({'session': cookies_raw})
+		else:
+			try:
 				json.loads(cookies_raw)
-		except json.JSONDecodeError:
-			return JSONResponse({'success': False, 'message': 'Cookies JSON 格式不正确'})
+			except json.JSONDecodeError:
+				return JSONResponse({'success': False, 'message': 'Cookies JSON 格式不正确'})
 		account_id = await create_account(
 			name=name, provider=provider, auth_method='cookie',
 			cookies=cookies_raw, api_user=api_user,
@@ -85,7 +88,10 @@ async def api_update_account(account_id: int, request: Request):
 			updates['password'] = data['password'].strip()
 	else:
 		if 'cookies' in data and data['cookies'].strip():
-			updates['cookies'] = data['cookies'].strip()
+			c = data['cookies'].strip()
+			if not c.startswith('{'):
+				c = json.dumps({'session': c})
+			updates['cookies'] = c
 		if 'api_user' in data and data['api_user'].strip():
 			updates['api_user'] = data['api_user'].strip()
 
