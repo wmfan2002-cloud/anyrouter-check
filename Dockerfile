@@ -1,5 +1,9 @@
 FROM python:3.11-slim
 
+# Ensure consistent HOME and Playwright browser path
+ENV HOME=/root
+ENV PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright
+
 # Install system dependencies for Playwright Chromium
 # Let Playwright install its own system dependencies to avoid version mismatches
 RUN apt-get update && apt-get install -y --no-install-recommends \

@@ -214,6 +214,8 @@ async def _run_cookie_checkin(account_row: dict, triggered_by: str) -> dict:
 			msg = f'Balance: ${balance}, Used: ${used}'
 		elif user_info:
 			msg = user_info.get('error', '')
+		if not success and not msg:
+			msg = 'Check-in failed (WAF bypass or request error)'
 
 		# Update account status
 		update_data = {
