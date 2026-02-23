@@ -8,26 +8,34 @@ router = APIRouter()
 PAGE_SIZE = 30
 
 
+def _parse_positive_int(value: str | None, default: int | None = None) -> int | None:
+	if value is None or value == '':
+		return default
+	try:
+		parsed = int(value)
+	except (TypeError, ValueError):
+		return default
+	return parsed if parsed > 0 else default
+
+
 @router.get('/logs')
 async def logs_page(request: Request):
 	from web.app import templates
 
-	page = int(request.query_params.get('page', 1))
+	page = _parse_positive_int(request.query_params.get('page'), 1) or 1
 	status = request.query_params.get('status', '') or None
 	account_id = request.query_params.get('account_id', '') or None
 
-	if account_id:
-		account_id_int = int(account_id)
-	else:
-		account_id_int = None
+	account_id_int = _parse_positive_int(account_id)
+
+	total = await get_log_count(account_id=account_id_int, status=status)
+	total_pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
+	page = min(page, total_pages)
 
 	offset = (page - 1) * PAGE_SIZE
 	logs = await get_checkin_logs(limit=PAGE_SIZE, offset=offset, account_id=account_id_int, status=status)
 	for log in logs:
 		log.update(summarize_reason(log.get('status'), log.get('message')))
-
-	total = await get_log_count(account_id=account_id_int, status=status)
-	total_pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
 
 	accounts = await get_all_accounts()
 

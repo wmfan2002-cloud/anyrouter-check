@@ -289,7 +289,7 @@ async def get_checkin_logs(limit=50, offset=0, account_id=None, status=None):
 	try:
 		conditions = []
 		params = []
-		if account_id:
+		if account_id is not None:
 			conditions.append('account_id = ?')
 			params.append(account_id)
 		if status:
@@ -297,7 +297,7 @@ async def get_checkin_logs(limit=50, offset=0, account_id=None, status=None):
 			params.append(status)
 
 		where = f'WHERE {" AND ".join(conditions)}' if conditions else ''
-		query = f'SELECT * FROM checkin_logs {where} ORDER BY created_at DESC LIMIT ? OFFSET ?'
+		query = f'SELECT * FROM checkin_logs {where} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?'
 		params.extend([limit, offset])
 
 		cursor = await db.execute(query, params)
@@ -312,7 +312,7 @@ async def get_log_count(account_id=None, status=None):
 	try:
 		conditions = []
 		params = []
-		if account_id:
+		if account_id is not None:
 			conditions.append('account_id = ?')
 			params.append(account_id)
 		if status:
