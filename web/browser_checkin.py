@@ -68,7 +68,39 @@ async def browser_login_checkin(
 					await page.wait_for_timeout(3000)
 					await page.wait_for_selector('input[type="password"]', timeout=15000)
 
-				# Step 2: Fill in credentials
+				# Step 2: Dismiss any popup/modal overlays before filling form
+				logger.info(f'[PROCESSING] {account_name}: Checking for popup overlays...')
+				try:
+					for close_sel in [
+						'.semi-portal .semi-modal-content .semi-modal-header .semi-icon-close',
+						'.semi-portal .semi-icon-close',
+						'.semi-modal-close',
+						'.semi-notification-close',
+					]:
+						close_btn = page.locator(close_sel).first
+						if await close_btn.count() > 0 and await close_btn.is_visible():
+							await close_btn.click()
+							await page.wait_for_timeout(500)
+							logger.info(f'{account_name}: Dismissed popup via close button')
+							break
+					else:
+						overlay = page.locator('.semi-portal .semi-modal-mask, .semi-overlay')
+						if await overlay.count() > 0 and await overlay.is_visible():
+							await overlay.click(position={'x': 10, 'y': 10})
+							await page.wait_for_timeout(500)
+							logger.info(f'{account_name}: Dismissed popup via overlay click')
+						else:
+							await page.evaluate('document.querySelectorAll(".semi-portal").forEach(el => el.remove())')
+							await page.wait_for_timeout(300)
+				except Exception as e:
+					logger.debug(f'{account_name}: Popup dismiss attempt: {e}')
+					try:
+						await page.evaluate('document.querySelectorAll(".semi-portal").forEach(el => el.remove())')
+						await page.wait_for_timeout(300)
+					except Exception:
+						pass
+
+				# Step 3: Fill in credentials
 				logger.info(f'[PROCESSING] {account_name}: Filling in credentials...')
 
 				# Find the username/email input - it's typically the text input before password
@@ -113,7 +145,7 @@ async def browser_login_checkin(
 				await password_input.click()
 				await password_input.fill(password)
 
-				# Step 3: Click login button
+				# Step 4: Click login button
 				logger.info(f'[PROCESSING] {account_name}: Submitting login...')
 				submit_btn = None
 				for selector in [
@@ -134,7 +166,7 @@ async def browser_login_checkin(
 				else:
 					await submit_btn.click()
 
-				# Step 4: Wait for login to complete (URL changes away from /login)
+				# Step 5: Wait for login to complete (URL changes away from /login)
 				logger.info(f'[PROCESSING] {account_name}: Waiting for login result...')
 				try:
 					await page.wait_for_url(
@@ -162,19 +194,30 @@ async def browser_login_checkin(
 
 				logger.info(f'[SUCCESS] {account_name}: Login successful, current URL: {page.url}')
 
-				# Step 5: Wait for page to stabilize (auto check-in may happen)
+				# Step 6: Wait for page to stabilize (auto check-in may happen)
 				await page.wait_for_timeout(3000)
 
-				# Step 6: Fetch balance via API using the browser's authenticated session
+				# Step 7: Fetch balance via API using the browser's authenticated session
 				logger.info(f'[PROCESSING] {account_name}: Fetching balance info...')
 				user_info_url = f'{domain}{user_info_path}'
 
 				api_response = await page.evaluate(f'''
 					async () => {{
 						try {{
-							const res = await fetch("{user_info_url}", {{
-								headers: {{ "Accept": "application/json" }}
-							}});
+							// Get the user token from localStorage (NewAPI stores it there)
+							const userToken = localStorage.getItem("user") || "";
+							const headers = {{ "Accept": "application/json" }};
+							if (userToken) {{
+								try {{
+									const parsed = JSON.parse(userToken);
+									if (parsed.token) headers["Authorization"] = "Bearer " + parsed.token;
+									if (parsed.id) headers["New-Api-User"] = String(parsed.id);
+								}} catch(e) {{
+									// userToken might be the token itself
+									headers["Authorization"] = "Bearer " + userToken;
+								}}
+							}}
+							const res = await fetch("{user_info_url}", {{ headers }});
 							return await res.json();
 						}} catch(e) {{
 							return {{ error: e.message }};
@@ -193,7 +236,7 @@ async def browser_login_checkin(
 				elif api_response and api_response.get('error'):
 					logger.warning(f'[WARN] {account_name}: API error: {api_response["error"]}')
 				else:
-					logger.warning(f'[WARN] {account_name}: Unexpected API response')
+					logger.warning(f'[WARN] {account_name}: Unexpected API response: {str(api_response)[:300]}')
 
 				await context.close()
 
