@@ -85,6 +85,22 @@ def is_already_checked_in_message(message: str | None) -> bool:
 	return any(keyword in text for keyword in keywords)
 
 
+def is_cloudflare_h2_challenge(response) -> bool:
+	"""检测 Cloudflare 针对 HTTP/2 的 challenge（403 + cf-mitigated header）"""
+	if response.status_code != 403:
+		return False
+	cf_mitigated = response.headers.get('cf-mitigated', '').lower()
+	if 'challenge' in cf_mitigated:
+		return True
+	# 部分 Cloudflare 挑战不带 cf-mitigated，检查响应体
+	content_type = response.headers.get('content-type', '').lower()
+	if 'text/html' in content_type:
+		text = response.text or ''
+		if 'cf-chl' in text.lower() or 'just a moment' in text.lower():
+			return True
+	return False
+
+
 def is_waf_challenge_response(response_text: str) -> bool:
 	"""检测 HTTP 响应是否为 WAF 拦截页面（非正常 API 响应）。
 
@@ -215,7 +231,7 @@ def execute_check_in(client, account_name: str, provider_config, headers: dict) 
 
 	可重试：网络异常、HTTP 5xx、HTTP 429。
 	不重试：HTTP 200 带 API 级别失败、HTTP 4xx（429 除外）。
-	WAF 挑战直接返回，由 scheduler 处理刷新。
+	WAF 挑战 / Cloudflare HTTP/2 挑战直接返回，由 scheduler 处理。
 	"""
 	import time
 
@@ -231,8 +247,8 @@ def execute_check_in(client, account_name: str, provider_config, headers: dict) 
 		try:
 			result = _execute_check_in_once(client, account_name, provider_config, headers)
 
-			# WAF 挑战直接返回，由 scheduler 处理缓存刷新
-			if result.get('_waf_challenge'):
+			# WAF / CF H2 挑战直接返回，由上层处理
+			if result.get('_waf_challenge') or result.get('_cf_h2_challenge'):
 				print(f'[WAF] {account_name}: WAF challenge detected in response')
 				return result
 
@@ -277,6 +293,12 @@ def _execute_check_in_once(client, account_name: str, provider_config, headers: 
 
 	if response.status_code != 200:
 		response_text = response.text or ''
+		# 检测 Cloudflare HTTP/2 挑战（403 + cf-mitigated: challenge）
+		if is_cloudflare_h2_challenge(response):
+			print(f'[CF-H2] {account_name}: Cloudflare HTTP/2 challenge detected (403)')
+			return {'success': False, 'status': 'failed',
+					'message': f'Cloudflare HTTP/2 challenge (HTTP 403)',
+					'_cf_h2_challenge': True}
 		# 检测 WAF 挑战
 		if is_waf_challenge_response(response_text):
 			return {'success': False, 'status': 'failed',
@@ -362,61 +384,80 @@ async def check_in_account(account: AccountConfig, account_index: int, app_confi
 	if not all_cookies:
 		return False, None
 
-	client = httpx.Client(http2=True, timeout=30.0)
+	headers = {
+		'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
+		'Accept': 'application/json, text/plain, */*',
+		'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+		'Accept-Encoding': 'gzip, deflate, br, zstd',
+		'Referer': provider_config.domain,
+		'Origin': provider_config.domain,
+		'Connection': 'keep-alive',
+		'Sec-Fetch-Dest': 'empty',
+		'Sec-Fetch-Mode': 'cors',
+		'Sec-Fetch-Site': 'same-origin',
+		provider_config.api_user_key: account.api_user,
+	}
 
-	try:
-		client.cookies.update(all_cookies)
+	user_info_url = f'{provider_config.domain}{provider_config.user_info_path}'
 
-		headers = {
-			'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
-			'Accept': 'application/json, text/plain, */*',
-			'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-			'Accept-Encoding': 'gzip, deflate, br, zstd',
-			'Referer': provider_config.domain,
-			'Origin': provider_config.domain,
-			'Connection': 'keep-alive',
-			'Sec-Fetch-Dest': 'empty',
-			'Sec-Fetch-Mode': 'cors',
-			'Sec-Fetch-Site': 'same-origin',
-			provider_config.api_user_key: account.api_user,
-		}
+	# 先用 HTTP/2 尝试，遇到 Cloudflare H2 challenge 自动回退 HTTP/1.1
+	for use_h2 in [True, False]:
+		client = httpx.Client(http2=use_h2, timeout=30.0)
+		try:
+			client.cookies.update(all_cookies)
 
-		user_info_url = f'{provider_config.domain}{provider_config.user_info_path}'
+			if provider_config.needs_manual_check_in():
+				check_in_result = execute_check_in(client, account_name, provider_config, headers)
 
-		if provider_config.needs_manual_check_in():
-			check_in_result = execute_check_in(client, account_name, provider_config, headers)
+				# Cloudflare HTTP/2 挑战 → 回退 HTTP/1.1 重试
+				if check_in_result.get('_cf_h2_challenge') and use_h2:
+					print(f'[CF-H2] {account_name}: Falling back to HTTP/1.1')
+					continue
 
-			# Fetch balance AFTER check-in so we get the updated value
-			user_info = get_user_info(client, headers, user_info_url)
-			if user_info and user_info.get('success'):
-				print(user_info['display'])
-			elif user_info:
-				print(user_info.get('error', 'Unknown error'))
+				# Fetch balance AFTER check-in so we get the updated value
+				user_info = get_user_info(client, headers, user_info_url)
+				if user_info and user_info.get('success'):
+					print(user_info['display'])
+				elif user_info:
+					print(user_info.get('error', 'Unknown error'))
 
-			user_info_dict = user_info.copy() if isinstance(user_info, dict) else {}
-			user_info_dict['checkin_status'] = check_in_result['status']
-			user_info_dict['checkin_message'] = check_in_result['message']
+				user_info_dict = user_info.copy() if isinstance(user_info, dict) else {}
+				user_info_dict['checkin_status'] = check_in_result['status']
+				user_info_dict['checkin_message'] = check_in_result['message']
 
-			if check_in_result['status'] == 'failed':
-				user_info_dict['success'] = False
-				user_info_dict['error'] = check_in_result['message']
+				# 传递内部标记供 scheduler 识别
+				if check_in_result.get('_waf_challenge'):
+					user_info_dict['_waf_challenge'] = True
 
-			return check_in_result['success'], user_info_dict
-		else:
-			# No explicit check-in needed; fetching user info triggers auto check-in
-			user_info = get_user_info(client, headers, user_info_url)
-			if user_info and user_info.get('success'):
-				print(user_info['display'])
-			elif user_info:
-				print(user_info.get('error', 'Unknown error'))
-			print(f'[INFO] {account_name}: Check-in completed automatically (triggered by user info request)')
-			return True, user_info
+				if check_in_result['status'] == 'failed':
+					user_info_dict['success'] = False
+					user_info_dict['error'] = check_in_result['message']
 
-	except Exception as e:
-		print(f'[FAILED] {account_name}: Error occurred during check-in process - {str(e)[:50]}...')
-		return False, None
-	finally:
-		client.close()
+				if not use_h2:
+					user_info_dict['_used_h1'] = True
+
+				return check_in_result['success'], user_info_dict
+			else:
+				# No explicit check-in needed; fetching user info triggers auto check-in
+				user_info = get_user_info(client, headers, user_info_url)
+				if user_info and user_info.get('success'):
+					print(user_info['display'])
+				elif user_info:
+					print(user_info.get('error', 'Unknown error'))
+				print(f'[INFO] {account_name}: Check-in completed automatically (triggered by user info request)')
+				return True, user_info
+
+		except Exception as e:
+			if use_h2:
+				print(f'[WARN] {account_name}: HTTP/2 error: {str(e)[:50]}, trying HTTP/1.1...')
+				continue
+			print(f'[FAILED] {account_name}: Error occurred during check-in process - {str(e)[:50]}...')
+			return False, None
+		finally:
+			client.close()
+
+	# 两次都失败（不应该到这里，但防御性处理）
+	return False, None
 
 
 async def main():
