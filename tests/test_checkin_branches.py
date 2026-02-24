@@ -113,6 +113,9 @@ def test_scheduler_cookie_mode_records_already_checked_in(monkeypatch):
 
 	monkeypatch.setattr(scheduler, '_build_provider_config', AsyncMock(return_value=provider))
 	monkeypatch.setattr(scheduler, 'update_account', AsyncMock())
+	monkeypatch.setattr(scheduler, 'get_cached_waf_cookies', AsyncMock(return_value={'acw_tc': 'cached'}))
+	monkeypatch.setattr(scheduler, 'save_waf_cookies', AsyncMock())
+	monkeypatch.setattr(scheduler, 'delete_waf_cookies', AsyncMock())
 	log_mock = AsyncMock()
 	monkeypatch.setattr(scheduler, 'add_checkin_log', log_mock)
 

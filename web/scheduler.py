@@ -11,9 +11,13 @@ from apscheduler.triggers.cron import CronTrigger
 from utils.config import AccountConfig, ProviderConfig
 from web.database import (
 	add_checkin_log,
+	cleanup_expired_waf_cookies,
+	delete_waf_cookies,
 	get_all_providers,
+	get_cached_waf_cookies,
 	get_enabled_accounts,
 	get_setting,
+	save_waf_cookies,
 	set_setting,
 	update_account,
 )
@@ -85,6 +89,13 @@ def _schedule_job(cron_expr: str):
 
 async def _scheduled_checkin():
 	logger.info('Scheduled check-in triggered')
+	# 清理过期的 WAF cookie 缓存
+	try:
+		deleted = await cleanup_expired_waf_cookies()
+		if deleted:
+			logger.info(f'Cleaned up {deleted} expired WAF cookie cache entries')
+	except Exception as e:
+		logger.warning(f'WAF cookie cleanup failed: {e}')
 	await run_checkin_task(triggered_by='schedule')
 
 
@@ -151,6 +162,91 @@ def _resolve_domain(provider_config, account_row: dict) -> str | None:
 		provider_config.domain = account_domain
 		return account_domain
 	return None
+
+
+def _waf_cache_key(provider_config, account_row: dict) -> str:
+	"""Determine cache key for WAF cookies.
+
+	Regular providers use provider name; template providers (empty domain)
+	use provider_name:account_domain to avoid cross-account conflicts.
+	"""
+	account_domain = (account_row.get('domain') or '').rstrip('/')
+	if provider_config.domain and not account_domain:
+		return provider_config.name
+	return f'{provider_config.name}:{account_domain or provider_config.domain}'
+
+
+async def _get_waf_cookies_cached(
+	account_name: str, provider_config, account_row: dict
+) -> dict | None:
+	"""Get WAF cookies with cache-first strategy.
+
+	Returns: dict of cookies on success, None if browser fetch failed.
+	Empty dict {} if WAF bypass is not needed.
+	"""
+	if not provider_config.needs_waf_cookies():
+		return {}
+
+	cache_key = _waf_cache_key(provider_config, account_row)
+
+	# 尝试缓存
+	try:
+		cached = await get_cached_waf_cookies(cache_key)
+		if cached:
+			logger.info(f'{account_name}: Using cached WAF cookies (key={cache_key})')
+			return cached
+	except Exception as e:
+		logger.warning(f'{account_name}: Failed to check WAF cookie cache: {e}')
+
+	# 缓存未命中，启动浏览器
+	logger.info(f'{account_name}: No cached WAF cookies, launching browser...')
+	from checkin import get_waf_cookies_with_playwright
+
+	login_url = f'{provider_config.domain}{provider_config.login_path}'
+	waf_cookies = await get_waf_cookies_with_playwright(
+		account_name, login_url, provider_config.waf_cookie_names
+	)
+
+	if waf_cookies:
+		# 保存到缓存
+		try:
+			await save_waf_cookies(cache_key, waf_cookies)
+			logger.info(f'{account_name}: WAF cookies cached for 24 hours (key={cache_key})')
+		except Exception as e:
+			logger.warning(f'{account_name}: Failed to cache WAF cookies: {e}')
+
+	return waf_cookies
+
+
+async def _invalidate_and_refresh_waf_cookies(
+	account_name: str, provider_config, account_row: dict
+) -> dict | None:
+	"""Invalidate cached WAF cookies and get fresh ones via browser."""
+	cache_key = _waf_cache_key(provider_config, account_row)
+
+	# 清除缓存
+	try:
+		await delete_waf_cookies(cache_key)
+		logger.info(f'{account_name}: Invalidated WAF cookie cache (key={cache_key})')
+	except Exception as e:
+		logger.warning(f'{account_name}: Failed to invalidate WAF cookie cache: {e}')
+
+	# 启动浏览器获取新 cookies
+	from checkin import get_waf_cookies_with_playwright
+
+	login_url = f'{provider_config.domain}{provider_config.login_path}'
+	waf_cookies = await get_waf_cookies_with_playwright(
+		account_name, login_url, provider_config.waf_cookie_names
+	)
+
+	if waf_cookies:
+		try:
+			await save_waf_cookies(cache_key, waf_cookies)
+			logger.info(f'{account_name}: Fresh WAF cookies cached (key={cache_key})')
+		except Exception as e:
+			logger.warning(f'{account_name}: Failed to cache fresh WAF cookies: {e}')
+
+	return waf_cookies
 
 
 async def _run_browser_login_checkin(account_row: dict, triggered_by: str) -> dict:
@@ -235,8 +331,9 @@ async def _run_browser_login_checkin(account_row: dict, triggered_by: str) -> di
 
 
 async def _run_cookie_checkin(account_row: dict, triggered_by: str) -> dict:
-	"""使用 Cookie 方式签到（原有逻辑）"""
-	from checkin import check_in_account
+	"""使用 Cookie 方式签到（带 WAF cookie 缓存和挑战检测）"""
+	from checkin import check_in_account, is_waf_challenge_response, parse_cookies
+	from dataclasses import replace as dc_replace
 	from utils.config import AppConfig
 
 	provider_config = await _build_provider_config(account_row['provider'])
@@ -264,24 +361,88 @@ async def _run_cookie_checkin(account_row: dict, triggered_by: str) -> dict:
 		)
 		return {'success': False, 'message': msg}
 
-	# Build a temporary AppConfig with the resolved provider
+	# --- WAF cookie 缓存优先 ---
+	# 保存原始 provider_config 用于后续 WAF 挑战重试
+	original_provider = provider_config
+	original_needs_waf = provider_config.needs_waf_cookies()
+	checkin_account_row = account_row
+
+	if original_needs_waf:
+		waf_cookies = await _get_waf_cookies_cached(
+			account_row['name'], provider_config, account_row
+		)
+		if waf_cookies is None:
+			# 浏览器获取失败，尝试不用 WAF 作为回退
+			logger.warning(f'{account_row["name"]}: WAF cookie fetch failed, trying without WAF')
+			provider_config = dc_replace(provider_config, bypass_method=None, waf_cookie_names=None)
+		elif waf_cookies:
+			# 将缓存的 WAF cookies 合并到账号 cookies 中，跳过浏览器
+			raw_cookies = account_row['cookies']
+			try:
+				raw_cookies = json.loads(raw_cookies)
+			except (json.JSONDecodeError, TypeError):
+				pass
+			user_cookies = parse_cookies(raw_cookies)
+			merged = {**waf_cookies, **user_cookies}
+			checkin_account_row = {**account_row, 'cookies': json.dumps(merged)}
+			provider_config = dc_replace(provider_config, bypass_method=None, waf_cookie_names=None)
+		# waf_cookies == {} 表示不需要 WAF，直接继续
+
 	app_config = AppConfig(providers={account_row['provider']: provider_config})
-	account_config = _db_account_to_config(account_row, 0)
+	account_config = _db_account_to_config(checkin_account_row, 0)
 
 	try:
 		success, user_info = await check_in_account(account_config, 0, app_config)
 
-		# WAF 自动回退：如果签到失败且 Provider 开启了 WAF 绕过，尝试不使用 WAF 重试
 		waf_hint = ''
-		if not success and provider_config.needs_waf_cookies():
+
+		# --- WAF 挑战检测 + 缓存刷新重试 ---
+		if not success and original_needs_waf and user_info:
+			checkin_message = user_info.get('checkin_message', '')
+			is_waf = (
+				user_info.get('_waf_challenge')
+				or is_waf_challenge_response(checkin_message)
+			)
+
+			if is_waf:
+				logger.info(f'{account_row["name"]}: WAF challenge detected, refreshing cookies...')
+				fresh_waf = await _invalidate_and_refresh_waf_cookies(
+					account_row['name'], original_provider, account_row
+				)
+				if fresh_waf:
+					# 用新 cookies 重试
+					raw_cookies = account_row['cookies']
+					try:
+						raw_cookies = json.loads(raw_cookies)
+					except (json.JSONDecodeError, TypeError):
+						pass
+					user_cookies = parse_cookies(raw_cookies)
+					merged_fresh = {**fresh_waf, **user_cookies}
+					retry_row = {**account_row, 'cookies': json.dumps(merged_fresh)}
+					retry_provider = dc_replace(original_provider, bypass_method=None, waf_cookie_names=None)
+					retry_app_config = AppConfig(providers={account_row['provider']: retry_provider})
+					retry_account_config = _db_account_to_config(retry_row, 0)
+
+					success, user_info = await check_in_account(retry_account_config, 0, retry_app_config)
+					if success:
+						waf_hint = 'WAF cookies refreshed successfully'
+						logger.info(f'{account_row["name"]}: Check-in succeeded after WAF refresh')
+
+		# --- 最终兜底：去掉 WAF 重试 ---
+		if not success and not waf_hint and original_needs_waf:
 			logger.info(f'WAF bypass failed for {account_row["name"]}, retrying without WAF...')
-			from dataclasses import replace as dc_replace
-			provider_no_waf = dc_replace(provider_config, bypass_method=None, waf_cookie_names=None)
+			provider_no_waf = dc_replace(original_provider, bypass_method=None, waf_cookie_names=None)
 			app_config_retry = AppConfig(providers={account_row['provider']: provider_no_waf})
-			success, user_info = await check_in_account(account_config, 0, app_config_retry)
+			# 使用原始 cookies（不含 WAF cookies）
+			account_config_orig = _db_account_to_config(account_row, 0)
+			success, user_info = await check_in_account(account_config_orig, 0, app_config_retry)
 			if success:
 				waf_hint = '签到成功（无需 WAF 绕过），建议将该 Provider 的 WAF 绕过设置为「无」'
 				logger.info(f'{account_row["name"]}: {waf_hint}')
+
+		# --- 清理内部标记 ---
+		if user_info:
+			user_info.pop('_waf_challenge', None)
 
 		balance = user_info.get('quota') if user_info and user_info.get('success') else None
 		used = user_info.get('used_quota') if user_info and user_info.get('success') else None

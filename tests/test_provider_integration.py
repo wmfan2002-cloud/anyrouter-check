@@ -11,21 +11,21 @@ from utils.config import AppConfig
 from web import database, scheduler
 
 
-def test_default_providers_include_new_api(monkeypatch):
+def test_default_providers_include_newapi(monkeypatch):
 	monkeypatch.delenv('PROVIDERS', raising=False)
 
 	config = AppConfig.load_from_env()
-	assert 'new-api' in config.providers
+	assert 'newapi' in config.providers
 
-	provider = config.providers['new-api']
-	assert provider.domain == 'https://new-api.example.com'
+	provider = config.providers['newapi']
+	assert provider.domain == ''
 	assert provider.login_path == '/login'
 	assert provider.sign_in_path == '/api/user/checkin'
 	assert provider.user_info_path == '/api/user/self'
 	assert provider.api_user_key == 'new-api-user'
 
 
-def test_init_builtin_providers_contains_new_api_defaults():
+def test_init_builtin_providers_contains_newapi_defaults():
 	select_names = []
 	insert_rows = []
 
@@ -47,14 +47,14 @@ def test_init_builtin_providers_contains_new_api_defaults():
 
 	asyncio.run(database._init_builtin_providers(mock_db))
 
-	assert 'new-api' in select_names
-	new_api_rows = [row for row in insert_rows if row[0] == 'new-api']
-	assert len(new_api_rows) == 1
-	assert new_api_rows[0][1] == 'https://new-api.example.com'
-	assert new_api_rows[0][2] == '/login'
-	assert new_api_rows[0][3] == '/api/user/checkin'
-	assert new_api_rows[0][4] == '/api/user/self'
-	assert new_api_rows[0][5] == 'new-api-user'
+	assert 'newapi' in select_names
+	newapi_rows = [row for row in insert_rows if row[0] == 'newapi']
+	assert len(newapi_rows) == 1
+	assert newapi_rows[0][1] == ''
+	assert newapi_rows[0][2] == '/login'
+	assert newapi_rows[0][3] == '/api/user/checkin'
+	assert newapi_rows[0][4] == '/api/user/self'
+	assert newapi_rows[0][5] == 'new-api-user'
 
 
 def test_scheduler_build_provider_config_uses_provider_specific_fields(monkeypatch):

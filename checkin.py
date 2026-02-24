@@ -20,6 +20,8 @@ from utils.notify import notify
 load_dotenv()
 
 BALANCE_HASH_FILE = 'balance_hash.txt'
+MAX_CHECKIN_RETRIES = 3
+INITIAL_RETRY_DELAY_SECONDS = 1.0
 
 
 def load_balance_hash():
@@ -81,6 +83,29 @@ def is_already_checked_in_message(message: str | None) -> bool:
 		'重复签到',
 	]
 	return any(keyword in text for keyword in keywords)
+
+
+def is_waf_challenge_response(response_text: str) -> bool:
+	"""检测 HTTP 响应是否为 WAF 拦截页面（非正常 API 响应）。
+
+	检测阿里云 WAF、Cloudflare 等常见 WAF 挑战标志。
+	"""
+	if not response_text:
+		return False
+
+	text_lower = response_text.lower()
+	markers = [
+		'acw_sc__v2',
+		'<script>var arg1=',
+		'just a moment',
+		'checking your browser',
+	]
+
+	# HTML 响应体且包含 WAF 标记
+	if response_text.strip().startswith('<') and 'acw_sc' in text_lower:
+		return True
+
+	return any(marker in text_lower for marker in markers)
 
 
 async def get_waf_cookies_with_playwright(account_name: str, login_url: str, required_cookies: list[str]):
@@ -186,7 +211,60 @@ async def prepare_cookies(account_name: str, provider_config, user_cookies: dict
 
 
 def execute_check_in(client, account_name: str, provider_config, headers: dict) -> dict:
-	"""执行签到请求"""
+	"""执行签到请求（带重试和指数退避）。
+
+	可重试：网络异常、HTTP 5xx、HTTP 429。
+	不重试：HTTP 200 带 API 级别失败、HTTP 4xx（429 除外）。
+	WAF 挑战直接返回，由 scheduler 处理刷新。
+	"""
+	import time
+
+	last_result = None
+
+	for attempt in range(MAX_CHECKIN_RETRIES):
+		if attempt > 0:
+			delay = INITIAL_RETRY_DELAY_SECONDS * (2 ** (attempt - 1))
+			print(f'[RETRY] {account_name}: Attempt {attempt + 1}/{MAX_CHECKIN_RETRIES}, '
+				  f'waiting {delay:.0f}s...')
+			time.sleep(delay)
+
+		try:
+			result = _execute_check_in_once(client, account_name, provider_config, headers)
+
+			# WAF 挑战直接返回，由 scheduler 处理缓存刷新
+			if result.get('_waf_challenge'):
+				print(f'[WAF] {account_name}: WAF challenge detected in response')
+				return result
+
+			# 5xx/429 可重试
+			if result.get('_retryable'):
+				last_result = result
+				continue
+
+			return result
+
+		except (httpx.TimeoutException, httpx.ConnectError, httpx.ReadError,
+				httpx.WriteError, httpx.PoolTimeout, httpx.ConnectTimeout) as e:
+			print(f'[RETRY] {account_name}: Network error on attempt {attempt + 1}: {e}')
+			last_result = {'success': False, 'status': 'failed',
+						   'message': f'Network error: {str(e)[:100]}'}
+		except Exception as e:
+			print(f'[FAILED] {account_name}: Unexpected error: {e}')
+			return {'success': False, 'status': 'failed',
+					'message': f'Unexpected error: {str(e)[:100]}'}
+
+	# 所有重试用尽
+	if last_result:
+		last_result.pop('_retryable', None)
+		last_result['message'] = f'{last_result["message"]} (after {MAX_CHECKIN_RETRIES} attempts)'
+		return last_result
+
+	return {'success': False, 'status': 'failed',
+			'message': f'Check-in failed after {MAX_CHECKIN_RETRIES} attempts'}
+
+
+def _execute_check_in_once(client, account_name: str, provider_config, headers: dict) -> dict:
+	"""执行单次签到请求（无重试）"""
 	print(f'[NETWORK] {account_name}: Executing check-in')
 
 	checkin_headers = headers.copy()
@@ -198,9 +276,26 @@ def execute_check_in(client, account_name: str, provider_config, headers: dict) 
 	print(f'[RESPONSE] {account_name}: Response status code {response.status_code}')
 
 	if response.status_code != 200:
+		response_text = response.text or ''
+		# 检测 WAF 挑战
+		if is_waf_challenge_response(response_text):
+			return {'success': False, 'status': 'failed',
+					'message': f'WAF challenge detected (HTTP {response.status_code})',
+					'_waf_challenge': True}
 		error_msg = f'Check-in failed - HTTP {response.status_code}'
 		print(f'[FAILED] {account_name}: {error_msg}')
+		# 5xx/429 标记为可重试
+		if response.status_code >= 500 or response.status_code == 429:
+			return {'success': False, 'status': 'failed', 'message': error_msg, '_retryable': True}
 		return {'success': False, 'status': 'failed', 'message': error_msg}
+
+	# 检测 200 响应中的 WAF 拦截（HTML 而非 JSON）
+	response_text = response.text or ''
+	if is_waf_challenge_response(response_text):
+		print(f'[WAF] {account_name}: WAF challenge detected in 200 response body')
+		return {'success': False, 'status': 'failed',
+				'message': 'WAF challenge detected in response body',
+				'_waf_challenge': True}
 
 	try:
 		result = response.json()
@@ -226,7 +321,6 @@ def execute_check_in(client, account_name: str, provider_config, headers: dict) 
 		print(f'[FAILED] {account_name}: Check-in failed - {error_msg}')
 		return {'success': False, 'status': 'failed', 'message': error_msg}
 	except json.JSONDecodeError:
-		response_text = response.text or ''
 		if is_already_checked_in_message(response_text):
 			print(f'[INFO] {account_name}: Already checked in')
 			return {

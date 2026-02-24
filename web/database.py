@@ -1,6 +1,6 @@
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import aiosqlite
 
@@ -67,6 +67,14 @@ async def init_db():
 			CREATE TABLE IF NOT EXISTS settings (
 				key TEXT PRIMARY KEY,
 				value TEXT NOT NULL
+			);
+
+			CREATE TABLE IF NOT EXISTS waf_cookies (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				provider_id TEXT NOT NULL UNIQUE,
+				cookies TEXT NOT NULL,
+				fetched_at TEXT NOT NULL,
+				expires_at TEXT NOT NULL
 			);
 		''')
 		await _init_builtin_providers(db)
@@ -369,5 +377,78 @@ async def set_setting(key: str, value: str):
 			(key, value)
 		)
 		await db.commit()
+	finally:
+		await db.close()
+
+
+# --- WAF Cookie Cache ---
+
+WAF_CACHE_HOURS = 24
+
+
+async def get_cached_waf_cookies(provider_id: str) -> dict | None:
+	"""Get valid (non-expired) cached WAF cookies for a provider."""
+	db = await get_db()
+	try:
+		cursor = await db.execute(
+			'SELECT cookies, expires_at FROM waf_cookies WHERE provider_id = ?',
+			(provider_id,)
+		)
+		row = await cursor.fetchone()
+		if not row:
+			return None
+
+		expires_at = datetime.fromisoformat(row['expires_at'])
+		if datetime.now() >= expires_at:
+			return None
+
+		return json.loads(row['cookies'])
+	except Exception:
+		return None
+	finally:
+		await db.close()
+
+
+async def save_waf_cookies(provider_id: str, cookies: dict):
+	"""Save or update WAF cookies for a provider (24-hour cache)."""
+	now = datetime.now()
+	expires_at = now + timedelta(hours=WAF_CACHE_HOURS)
+	cookies_json = json.dumps(cookies)
+	db = await get_db()
+	try:
+		await db.execute(
+			'''INSERT INTO waf_cookies (provider_id, cookies, fetched_at, expires_at)
+			   VALUES (?, ?, ?, ?)
+			   ON CONFLICT(provider_id) DO UPDATE SET
+			       cookies = excluded.cookies,
+			       fetched_at = excluded.fetched_at,
+			       expires_at = excluded.expires_at''',
+			(provider_id, cookies_json, now.isoformat(), expires_at.isoformat())
+		)
+		await db.commit()
+	finally:
+		await db.close()
+
+
+async def delete_waf_cookies(provider_id: str):
+	"""Delete cached WAF cookies for a provider (invalidate cache)."""
+	db = await get_db()
+	try:
+		await db.execute('DELETE FROM waf_cookies WHERE provider_id = ?', (provider_id,))
+		await db.commit()
+	finally:
+		await db.close()
+
+
+async def cleanup_expired_waf_cookies() -> int:
+	"""Delete all expired WAF cookies. Returns count of deleted rows."""
+	db = await get_db()
+	try:
+		cursor = await db.execute(
+			'DELETE FROM waf_cookies WHERE expires_at < ?',
+			(datetime.now().isoformat(),)
+		)
+		await db.commit()
+		return cursor.rowcount
 	finally:
 		await db.close()
