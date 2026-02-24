@@ -85,9 +85,10 @@
 				</div>
 				<span class="text-xs px-2 py-1 border-4 border-black font-black
 					{% if acc.last_status == 'success' %}bg-[#1dd1a1] text-black
+					{% elif acc.last_status == 'already_checked_in' %}bg-[#feca57] text-black
 					{% elif acc.last_status == 'failed' %}bg-[#ff6b6b] text-white
 					{% else %}bg-white text-black{% endif %}">
-					{% if acc.last_status == 'success' %}成功{% elif acc.last_status == 'failed' %}失败{% else %}未签到{% endif %}
+					{% if acc.last_status == 'success' %}成功{% elif acc.last_status == 'already_checked_in' %}今日已签到{% elif acc.last_status == 'failed' %}失败{% else %}未签到{% endif %}
 				</span>
 			</div>
 			<div class="space-y-1.5 text-xs font-bold text-black">
