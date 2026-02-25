@@ -62,6 +62,10 @@ async def logout():
 async def dashboard(request: Request):
 	from web.database import get_all_accounts, get_checkin_logs, get_setting
 	accounts = await get_all_accounts()
+	success_count = sum(1 for acc in accounts if acc.get('last_status') in {'success', 'already_checked_in'})
+	total_balance = round(
+		sum(acc.get('last_balance') or 0 for acc in accounts if acc.get('last_balance') is not None), 2
+	)
 	recent_logs = await get_checkin_logs(limit=10)
 	for log in recent_logs:
 		log.update(summarize_reason(log.get('status'), log.get('message')))
@@ -74,7 +78,9 @@ async def dashboard(request: Request):
 	return templates.TemplateResponse('dashboard.html', {
 		'request': request,
 		'accounts': accounts,
+		'success_count': success_count,
 		'recent_logs': recent_logs,
+		'total_balance': total_balance,
 		'cron_expression': cron_expr,
 		'next_run': next_run,
 		'active_page': 'dashboard',

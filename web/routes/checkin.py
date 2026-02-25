@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
-from web.database import get_account, get_enabled_accounts
+from web.database import get_account
 
 router = APIRouter()
 
@@ -29,8 +29,12 @@ async def api_checkin_single(account_id: int):
 
 	try:
 		result = await run_checkin_single(account, triggered_by='manual')
+		status = result.get('status')
+		if not status:
+			status = 'success' if result.get('success') else 'failed'
 		return JSONResponse({
 			'success': result['success'],
+			'status': status,
 			'message': result.get('message', ''),
 		})
 	except Exception as e:

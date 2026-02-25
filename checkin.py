@@ -478,6 +478,7 @@ async def main():
 	last_balance_hash = load_balance_hash()
 
 	success_count = 0
+	failed_count = 0
 	total_count = len(accounts)
 	notification_content = []
 	current_balances = {}
@@ -488,12 +489,19 @@ async def main():
 		account_key = f'account_{i + 1}'
 		try:
 			success, user_info = await check_in_account(account, i, app_config)
-			if success:
+			checkin_status = user_info.get('checkin_status') if user_info else None
+			if checkin_status in {'success', 'already_checked_in'}:
 				success_count += 1
+			elif checkin_status == 'failed':
+				failed_count += 1
+			elif success:
+				success_count += 1
+			else:
+				failed_count += 1
 
 			should_notify_this_account = False
 
-			if not success:
+			if checkin_status == 'failed' or (checkin_status is None and not success):
 				should_notify_this_account = True
 				need_notify = True
 				account_name = account.get_display_name(i)
@@ -517,6 +525,7 @@ async def main():
 		except Exception as e:
 			account_name = account.get_display_name(i)
 			print(f'[FAILED] {account_name} processing exception: {e}')
+			failed_count += 1
 			need_notify = True  # 异常也需要通知
 			notification_content.append(f'[FAIL] {account_name} exception: {str(e)[:50]}...')
 
@@ -558,13 +567,15 @@ async def main():
 		summary = [
 			'[STATS] Check-in result statistics:',
 			f'[SUCCESS] Success: {success_count}/{total_count}',
-			f'[FAIL] Failed: {total_count - success_count}/{total_count}',
+			f'[FAIL] Failed: {failed_count}/{total_count}',
 		]
 
-		if success_count == total_count:
+		if failed_count == 0 and success_count == total_count:
 			summary.append('[SUCCESS] All accounts check-in successful!')
+		elif failed_count == 0:
+			summary.append('[SUCCESS] All accounts completed (including already checked in)')
 		elif success_count > 0:
-			summary.append('[WARN] Some accounts check-in successful')
+			summary.append('[WARN] Some accounts completed, some failed')
 		else:
 			summary.append('[ERROR] All accounts check-in failed')
 
@@ -579,7 +590,7 @@ async def main():
 		print('[INFO] All accounts successful and no balance changes detected, notification skipped')
 
 	# 设置退出码
-	sys.exit(0 if success_count > 0 else 1)
+	sys.exit(0 if failed_count == 0 and total_count > 0 else 1)
 
 
 def run_main():

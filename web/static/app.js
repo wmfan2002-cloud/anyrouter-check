@@ -46,7 +46,10 @@ async function runCheckinSingle(accountId) {
 	try {
 		const res = await fetch(`/api/checkin/${accountId}`, { method: 'POST' });
 		const result = await res.json();
-		if (result.success) {
+		if (result.status === 'already_checked_in') {
+			showToast('今日已签到', 'info');
+			setTimeout(() => location.reload(), 1200);
+		} else if (result.status === 'success' || result.success) {
 			showToast('签到成功', 'success');
 			setTimeout(() => location.reload(), 1500);
 		} else {

@@ -264,7 +264,7 @@ async def _run_browser_login_checkin(account_row: dict, triggered_by: str) -> di
 			message=msg,
 			triggered_by=triggered_by,
 		)
-		return {'success': False, 'message': msg}
+		return {'success': False, 'status': 'failed', 'message': msg}
 
 	if not _resolve_domain(provider_config, account_row):
 		msg = f'Provider "{account_row["provider"]}" 无域名，且账号未指定域名'
@@ -276,7 +276,7 @@ async def _run_browser_login_checkin(account_row: dict, triggered_by: str) -> di
 			message=msg,
 			triggered_by=triggered_by,
 		)
-		return {'success': False, 'message': msg}
+		return {'success': False, 'status': 'failed', 'message': msg}
 
 	try:
 		result = await browser_login_checkin(
@@ -312,7 +312,7 @@ async def _run_browser_login_checkin(account_row: dict, triggered_by: str) -> di
 			triggered_by=triggered_by,
 		)
 
-		return {'success': success_flag, 'message': message}
+		return {'success': success_flag, 'status': status, 'message': message}
 
 	except Exception as e:
 		msg = str(e)[:200]
@@ -327,7 +327,7 @@ async def _run_browser_login_checkin(account_row: dict, triggered_by: str) -> di
 		await update_account(account_row['id'],
 							 last_checkin=datetime.now().isoformat(),
 							 last_status='failed')
-		return {'success': False, 'message': msg}
+		return {'success': False, 'status': 'failed', 'message': msg}
 
 
 async def _run_cookie_checkin(account_row: dict, triggered_by: str) -> dict:
@@ -347,7 +347,7 @@ async def _run_cookie_checkin(account_row: dict, triggered_by: str) -> dict:
 			message=msg,
 			triggered_by=triggered_by,
 		)
-		return {'success': False, 'message': msg}
+		return {'success': False, 'status': 'failed', 'message': msg}
 
 	if not _resolve_domain(provider_config, account_row):
 		msg = f'Provider "{account_row["provider"]}" 无域名，且账号未指定域名'
@@ -359,7 +359,7 @@ async def _run_cookie_checkin(account_row: dict, triggered_by: str) -> dict:
 			message=msg,
 			triggered_by=triggered_by,
 		)
-		return {'success': False, 'message': msg}
+		return {'success': False, 'status': 'failed', 'message': msg}
 
 	# --- WAF cookie 缓存优先 ---
 	# 保存原始 provider_config 用于后续 WAF 挑战重试
@@ -497,7 +497,7 @@ async def _run_cookie_checkin(account_row: dict, triggered_by: str) -> dict:
 			triggered_by=triggered_by,
 		)
 
-		return {'success': success, 'message': msg}
+		return {'success': success, 'status': status, 'message': msg}
 
 	except Exception as e:
 		msg = str(e)[:200]
@@ -512,7 +512,7 @@ async def _run_cookie_checkin(account_row: dict, triggered_by: str) -> dict:
 		await update_account(account_row['id'],
 							 last_checkin=datetime.now().isoformat(),
 							 last_status='failed')
-		return {'success': False, 'message': msg}
+		return {'success': False, 'status': 'failed', 'message': msg}
 
 
 async def run_checkin_task(triggered_by='schedule') -> dict:
@@ -523,18 +523,26 @@ async def run_checkin_task(triggered_by='schedule') -> dict:
 			return {'success_count': 0, 'total_count': 0}
 
 		success_count = 0
+		failed_count = 0
 		total_count = len(accounts)
 
 		for acc in accounts:
 			try:
 				result = await run_checkin_single(acc, triggered_by=triggered_by)
-				if result['success']:
+				status = result.get('status')
+				if not status:
+					status = 'success' if result.get('success') else 'failed'
+
+				if status in {'success', 'already_checked_in'}:
 					success_count += 1
+				elif status == 'failed':
+					failed_count += 1
 			except Exception as e:
+				failed_count += 1
 				logger.error(f'Error checking in account {acc["name"]}: {e}')
 
-		# Send notification if there are failures
-		if success_count < total_count:
+		# Send notification only when there are real failures
+		if failed_count > 0:
 			try:
 				from utils.notify import notify
 				content = f'签到完成: {success_count}/{total_count} 成功'
@@ -542,5 +550,10 @@ async def run_checkin_task(triggered_by='schedule') -> dict:
 			except Exception as e:
 				logger.error(f'Notification failed: {e}')
 
-		logger.info(f'Check-in completed: {success_count}/{total_count} success')
-		return {'success_count': success_count, 'total_count': total_count}
+		logger.info(
+			f'Check-in completed: success={success_count}, failed={failed_count}, total={total_count}'
+		)
+		return {
+			'success_count': success_count,
+			'total_count': total_count,
+		}

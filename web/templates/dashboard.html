@@ -42,7 +42,7 @@
 	</div>
 
 	<!-- Stats -->
-	<div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+	<div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-4 mb-8">
 		<div class="group bg-yellow-400 border-4 border-black p-5 shadow-[6px_6px_0px_#000] relative overflow-hidden transition-all duration-150 hover:shadow-[8px_8px_0px_#000]">
 			<div class="absolute -top-2 -right-2 w-8 h-8 bg-[#ff9ff3] rounded-full border-4 border-black transition-all duration-150 group-hover:translate-x-2 group-hover:-translate-y-1"></div>
 			<p class="text-xs font-black text-black">账号总数</p>
@@ -56,7 +56,12 @@
 		<div class="group bg-[#48dbfb] border-4 border-black p-5 shadow-[6px_6px_0px_#000] relative overflow-hidden transition-all duration-150 hover:shadow-[8px_8px_0px_#000]">
 			<div class="absolute top-1 right-2 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-b-[12px] border-b-[#ff6b6b] transition-all duration-150 group-hover:translate-y-1 group-hover:rotate-12"></div>
 			<p class="text-xs font-black text-black">签到成功</p>
-			<p class="text-4xl font-black text-black mt-1">{{ accounts|selectattr('last_status', 'equalto', 'success')|list|length }}</p>
+			<p class="text-4xl font-black text-black mt-1">{{ success_count }}</p>
+		</div>
+		<div class="group bg-[#feca57] border-4 border-black p-5 shadow-[6px_6px_0px_#000] relative overflow-hidden transition-all duration-150 hover:shadow-[8px_8px_0px_#000]">
+			<div class="absolute top-1 right-2 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-b-[12px] border-b-[#5f27cd] transition-all duration-150 group-hover:translate-y-1 group-hover:rotate-12"></div>
+			<p class="text-xs font-black text-black">总余额</p>
+			<p class="text-4xl font-black text-black mt-1">{{ '$%.2f'|format(total_balance) }}</p>
 		</div>
 		<div class="group bg-[#ff6b6b] border-4 border-black p-5 shadow-[6px_6px_0px_#000] relative overflow-hidden transition-all duration-150 hover:shadow-[8px_8px_0px_#000]">
 			<div class="absolute -top-1 -left-1 w-7 h-7 bg-yellow-400 rounded-full border-4 border-black transition-all duration-150 group-hover:translate-x-3 group-hover:translate-y-2"></div>
